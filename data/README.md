@@ -25,13 +25,19 @@ This script performs the following steps:
 
 ## 3. Dataset Generation
 
-The `python/generate_qa_dataset.py` script generates the final datasets for training and evaluation.
+The `python/generate_qa_dataset.py` script reads the generated biographies and partitions them into two distinct sets for fine-tuning and evaluation: `finetune` and `novel`.
 
-This script performs the following steps:
+This script can be configured with the following command-line arguments:
+- `--finetune-size`: The number of biographies to include in the fine-tuning set (default: 80000).
+- `--novel-size`: The number of biographies to include in the novel/evaluation set (default: 20000).
+
+The script performs the following steps:
 1.  Reads the `data/biography_attributes.jsonl` file.
-2.  For each biography, it generates:
-    - A full-text biography in the `bioS` format.
+2.  Shuffles the biographies and splits them into a `finetune` set and a `novel` set based on the provided sizes.
+3.  For each biography in both sets, it generates:
+    - A full-text biography.
     - A set of 6 question-answer pairs.
-3.  The generated data is saved to the following files:
-    - `data/bios.txt`: The full text of the biographies.
-    - `data/qa_dataset.jsonl`: The question-answer pairs, with the full biography included in each entry.
+4.  The generated data is saved to the following files:
+    - `data/bios.txt`: The full text of all 100,000 biographies.
+    - `data/qa_finetune_dataset.jsonl`: QA pairs for the `finetune` set.
+    - `data/qa_novel_dataset.jsonl`: QA pairs for the `novel` set, to be used for evaluating the model on unseen data.

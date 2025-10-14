@@ -1,5 +1,6 @@
 import json
 import random
+import argparse
 
 # Sentence Templates
 birth_date_templates = [
@@ -91,20 +92,51 @@ def generate_qa(entry, bio_text):
     
     return qa_pairs
 
-with open("data/biography_attributes.jsonl", "r") as fin, \
-     open("data/bios.txt", "w") as f_bios, \
-     open("data/qa_dataset.jsonl", "w") as f_qa:
-         
-    for line in fin:
-        entry = json.loads(line)
-        
-        # Generate and write biography
-        bio_text = generate_bio(entry)
-        f_bios.write(bio_text + "\n")
-        
-        # Generate and write QA pairs
-        qa_pairs = generate_qa(entry, bio_text)
-        for qa in qa_pairs:
-            f_qa.write(json.dumps(qa) + "\n")
+def main():
+    parser = argparse.ArgumentParser(description="Generate QA datasets from biography attributes.")
+    parser.add_argument("--finetune-size", type=int, default=80000, help="Number of biographies for the finetune dataset.")
+    parser.add_argument("--novel-size", type=int, default=20000, help="Number of biographies for the novel dataset.")
+    args = parser.parse_args()
 
-print("Generated bios.txt and qa_dataset.jsonl")
+    with open("data/biography_attributes.jsonl", "r") as fin:
+        lines = fin.readlines()
+
+    random.shuffle(lines)
+
+    finetune_size = args.finetune_size
+    novel_size = args.novel_size
+    
+    if finetune_size + novel_size > len(lines):
+        raise ValueError("The sum of finetune_size and novel_size cannot be greater than the total number of biographies.")
+
+    finetune_lines = lines[:finetune_size]
+    novel_lines = lines[finetune_size:finetune_size + novel_size]
+
+    with open("data/bios.txt", "w") as f_bios, \
+         open("data/qa_finetune_dataset.jsonl", "w") as f_qa_finetune, \
+         open("data/qa_novel_dataset.jsonl", "w") as f_qa_novel:
+
+        # Process and write finetune data
+        for line in finetune_lines:
+            entry = json.loads(line)
+            bio_text = generate_bio(entry)
+            f_bios.write(bio_text + "\n")
+            
+            qa_pairs = generate_qa(entry, bio_text)
+            for qa in qa_pairs:
+                f_qa_finetune.write(json.dumps(qa) + "\n")
+
+        # Process and write novel data
+        for line in novel_lines:
+            entry = json.loads(line)
+            bio_text = generate_bio(entry)
+            f_bios.write(bio_text + "\n")
+
+            qa_pairs = generate_qa(entry, bio_text)
+            for qa in qa_pairs:
+                f_qa_novel.write(json.dumps(qa) + "\n")
+
+    print("Generated bios.txt, qa_finetune_dataset.jsonl, and qa_novel_dataset.jsonl")
+
+if __name__ == "__main__":
+    main()
