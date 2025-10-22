@@ -3,7 +3,9 @@ import argparse
 import json
 import os
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, Trainer, TrainingArguments
+import numpy as np
+import evaluate
+from transformers import AutoTokenizer, AutoModelForCausalLM, Trainer, TrainingArguments, TrainerCallback, DataCollatorWithPadding
 from datasets import load_dataset
 from peft import get_peft_model, PromptTuningConfig, TaskType, PromptTuningInit, PeftModel
 from accelerate import Accelerator
@@ -13,7 +15,7 @@ class MemoryBankTrainer(Trainer):
         """
         Custom loss function for self-oracle training of the memory bank.
         """
-        
+
         # Oracle pass: model with full context
         oracle_outputs = model(
             input_ids=inputs["oracle_input_ids"],
@@ -40,16 +42,90 @@ class MemoryBankTrainer(Trainer):
             log_softmax(memory_logits),
             softmax(oracle_logits)
         )
-        
+
         return (loss, memory_outputs) if return_outputs else loss
+
+
+class ExtrinsicValidationCallback(TrainerCallback):
+    def __init__(self, eval_dataset, tokenizer, model, script_args):
+        self.eval_dataset = eval_dataset
+        self.tokenizer = tokenizer
+        self.model = model
+        self.script_args = script_args
+    def on_evaluate(self, args, state, control, metrics=None, **kwargs):
+        model = self.model
+        tokenizer = self.tokenizer
+        eval_dataset = self.eval_dataset
+
+        if model is None or tokenizer is None:
+            print("Skipping extrinsic validation: model or tokenizer not available.")
+            return
+
+        required_cols = ["memory_prompt", "answer"]
+        if not all(col in eval_dataset.column_names for col in required_cols):
+            print(f"Skipping extrinsic validation: Required columns {required_cols} not found in dataset.")
+            return
+
+        print("\nPerforming Extrinsic Validation...")
+        all_preds = []
+        all_labels = []
+        all_questions_for_log = []
+
+        model.eval()
+        for example in eval_dataset:
+            # Use pre-tokenized inputs from the dataset
+            input_ids = torch.tensor([example['memory_input_ids']]).to(model.device)
+            attention_mask = torch.tensor([example['memory_attention_mask']]).to(model.device)
+
+            with torch.no_grad():
+                generated_ids = model.generate(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    max_new_tokens=50,
+                    pad_token_id=0, eos_token_id=None
+                )
+
+            num_input_tokens = len(input_ids[0])
+            pred_ids = generated_ids[0][num_input_tokens:]
+            pred_text = tokenizer.decode(pred_ids, skip_special_tokens=True).strip()
+
+            all_preds.append(pred_text)
+            all_labels.append(example["answer"])
+            if "question" in example:
+                all_questions_for_log.append(example["question"])
+
+        # Compute ROUGE scores
+        rouge = evaluate.load('rouge')
+        rouge_scores = rouge.compute(predictions=all_preds, references=all_labels)
+
+        # Add scores to metrics for logging
+        if metrics is not None:
+            for key, value in rouge_scores.items():
+                metrics[f"eval_{key}"] = value
+
+        # Explicitly print ROUGE scores to console if control.log_metrics is not available
+        print(f"Extrinsic ROUGE Scores: {rouge_scores}")
+
+        # Log predictions to file
+        if state.is_world_process_zero and self.script_args.log_predictions:
+            log_file_path = os.path.join(self.script_args.output_dir, f"prediction_log.epoch_{int(state.epoch)}.jsonl")
+            print(f"Logging predictions to {log_file_path}")
+            with open(log_file_path, "w") as f:
+                for i in range(len(all_preds)):
+                    log_entry = {
+                        "question": all_questions_for_log[i] if i < len(all_questions_for_log) else "N/A",
+                        "ground_truth": all_labels[i],
+                        "prediction": all_preds[i]
+                    }
+                    f.write(json.dumps(log_entry) + "\n")
 
 def main():
     parser = argparse.ArgumentParser(description="Train a memory bank on a given biography.")
-    
+
     # Model and Tokenizer
     parser.add_argument("--base_model_path", type=str, required=True, help="Path to the base model checkpoint.")
     parser.add_argument("--adapter_path", type=str, help="Path to the fine-tuned adapter checkpoint.")
-    
+
     # Memory Bank Configuration
     parser.add_argument("--num_virtual_tokens", type=int, default=20, help="Number of virtual tokens for the memory bank.")
     parser.add_argument("--prompt_tuning_init", type=str, default="TEXT", choices=["TEXT", "RANDOM"], help="Initialization method for the memory bank.")
@@ -72,6 +148,8 @@ def main():
     parser.add_argument("--eval_strategy", type=str, default="epoch", choices=["no", "steps", "epoch"], help="Evaluation strategy to adopt during training.")
     parser.add_argument("--eval_steps", type=int, default=1, help="Number of update steps between two evaluations if evaluation_strategy is 'steps'.")
     parser.add_argument("--save_strategy", type=str, default="no", choices=["no", "steps", "epoch"], help="When to save a model checkpoint.")
+    parser.add_argument("--save_steps", type=int, default=500, help="Number of update steps for checkpointing.")
+    parser.add_argument("--log_predictions", action="store_true", help="Log model predictions to a file during evaluation.")
 
     args = parser.parse_args()
 
@@ -118,7 +196,7 @@ def main():
         num_virtual_tokens=args.num_virtual_tokens,
         tokenizer_name_or_path=args.base_model_path
     )
-    
+
     model = get_peft_model(model, peft_config)
 
     # Load and preprocess the data
@@ -156,12 +234,56 @@ def main():
 
     tokenized_dataset = dataset.map(preprocess_function, batched=True)
 
+    # Create a custom data collator to handle the unique batch structure
+    def custom_data_collator(features):
+        # Process oracle inputs
+        oracle_batch = tokenizer.pad(
+            {
+                "input_ids": [f["oracle_input_ids"] for f in features],
+                "attention_mask": [f["oracle_attention_mask"] for f in features]
+            },
+            padding=True,
+            return_tensors="pt"
+        )
+
+        # Process memory inputs
+        memory_batch = tokenizer.pad(
+            {
+                "input_ids": [f["memory_input_ids"] for f in features],
+                "attention_mask": [f["memory_attention_mask"] for f in features]
+            },
+            padding=True,
+            return_tensors="pt"
+        )
+
+        # Process labels
+        labels_batch = tokenizer.pad(
+            {"input_ids": [f["labels"] for f in features]},
+            padding=True,
+            return_tensors="pt"
+        )
+
+        return {
+            "oracle_input_ids": oracle_batch["input_ids"],
+            "oracle_attention_mask": oracle_batch["attention_mask"],
+            "memory_input_ids": memory_batch["input_ids"],
+            "memory_attention_mask": memory_batch["attention_mask"],
+            "labels": labels_batch["input_ids"]
+        }
+
+    # Create a clean version of the dataset for the Trainer, which expects only tensor-izable columns
+    text_columns = ['question', 'answer', 'biography', 'oracle_prompt', 'memory_prompt']
+    trainer_dataset = tokenized_dataset.remove_columns([col for col in text_columns if col in tokenized_dataset.column_names])
+
     # Initialize the MemoryBankTrainer
     trainer = MemoryBankTrainer(
         model=model,
         args=training_args,
-        train_dataset=tokenized_dataset,
-        eval_dataset=tokenized_dataset,
+        train_dataset=trainer_dataset, # Use the clean dataset for the trainer
+        eval_dataset=trainer_dataset,   # Use the clean dataset for the trainer
+        callbacks=[ExtrinsicValidationCallback(tokenized_dataset, tokenizer, model, args)], # Pass the full dataset to the callback
+        tokenizer=tokenizer,
+        data_collator=custom_data_collator,
     )
 
     trainer.train()
