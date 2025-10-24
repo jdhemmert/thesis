@@ -1,11 +1,11 @@
 import argparse
 import json
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
 from datasets import load_dataset
-from peft import PeftModel
 import evaluate
 import os
+
+from src.utils.model import load_model_and_tokenizer
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate base and fine-tuned models on a QA task.")
@@ -23,24 +23,14 @@ def main():
     if args.gpu_id:
         os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
 
-    # Load tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(args.base_model_path)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
+    # Load model and tokenizer using the utility function
+    model, tokenizer = load_model_and_tokenizer(
+        model_path=args.base_model_path,
+        adapter_path=args.adapter_path,
+        precision=args.precision
+    )
 
-    # Load model
-    dtype_map = {
-        "fp32": torch.float32,
-        "fp16": torch.float16,
-        "bf16": torch.bfloat16,
-    }
-    dtype = dtype_map.get(args.precision, torch.bfloat16)
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = AutoModelForCausalLM.from_pretrained(args.base_model_path, torch_dtype=dtype).to(device)
-
-    if args.adapter_path:
-        model = PeftModel.from_pretrained(model, args.adapter_path)
+    device = model.device # Get device from the loaded model
 
     model.eval() # Set model to evaluation mode
 

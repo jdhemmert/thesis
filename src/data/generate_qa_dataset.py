@@ -10,38 +10,53 @@ birth_date_templates = [
 ]
 
 birth_city_templates = [
-    "{pronoun} spent their early years in {birth_city}.",
-    "{pronoun} is from {birth_city}.",
-    "{pronoun} grew up in {birth_city}."
+    "{subject} spent {possessive} early years in {birth_city}.",
+    "{subject} is from {birth_city}.",
+    "{subject} grew up in {birth_city}."
 ]
 
 college_templates = [
-    "{pronoun} attended {college}.",
-    "{pronoun} went to {college} for their higher education.",
-    "{pronoun} is a graduate of {college}."
+    "{subject} attended {college}.",
+    "{subject} went to {college} for {possessive} higher education.",
+    "{subject} is a graduate of {college}."
 ]
 
 major_templates = [
-    "{pronoun} studied {major}.",
-    "{pronoun} majored in {major}.",
-    "{pronoun} has a degree in {major}."
+    "{subject} studied {major}.",
+    "{subject} majored in {major}.",
+    "{subject} has a degree in {major}."
 ]
 
 company_templates = [
-    "{pronoun} works at {company}.",
-    "{pronoun} is an employee of {company}.",
-    "{pronoun} started their career at {company}."
+    "{subject} works at {company}.",
+    "{subject} is an employee of {company}.",
+    "{subject} is currently employed by {company}."
 ]
 
+male_pronouns = {
+    "subject": "he",
+    "object": "him",
+    "possessive": "his",
+}
+
+female_pronouns = {
+    "subject": "she",
+    "object": "her",
+    "possessive": "her",
+}
+
+def capitalize(s):
+    return s[0].upper() + s[1:]
+
 def generate_bio(entry):
-    pronoun = "He" if entry["gender"] == "M" else "She"
+    pronouns = male_pronouns if entry["gender"] == "M" else female_pronouns
     
     sentences = [
-        random.choice(birth_date_templates).format(name=entry['name'], birth_date=entry['birth_date']),
-        random.choice(birth_city_templates).format(pronoun=pronoun, birth_city=entry['birth_city']),
-        random.choice(college_templates).format(pronoun=pronoun, college=entry['college']),
-        random.choice(major_templates).format(pronoun=pronoun, major=entry['major']),
-        random.choice(company_templates).format(pronoun=pronoun, company=entry['company'])
+        capitalize(random.choice(birth_date_templates).format(name=entry['name'], birth_date=entry['birth_date'], **pronouns)),
+        capitalize(random.choice(birth_city_templates).format(birth_city=entry['birth_city'], **pronouns)),
+        capitalize(random.choice(college_templates).format(college=entry['college'], **pronouns)),
+        capitalize(random.choice(major_templates).format(major=entry['major'], **pronouns)),
+        capitalize(random.choice(company_templates).format(company=entry['company'], **pronouns)),
     ]
     return " ".join(sentences)
 

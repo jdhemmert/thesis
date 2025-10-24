@@ -1,4 +1,3 @@
-
 import argparse
 import json
 import os
@@ -7,10 +6,19 @@ import numpy as np
 import evaluate
 from transformers import AutoTokenizer, AutoModelForCausalLM, Trainer, TrainingArguments, TrainerCallback, DataCollatorWithPadding
 from datasets import load_dataset
-from peft import get_peft_model, PromptTuningConfig, TaskType, PromptTuningInit, PeftModel
+from peft import get_peft_model, PrefixTuningConfig, PromptTuningConfig, TaskType, PromptTuningInit, PeftModel
 from accelerate import Accelerator
 
+from src.utils.model import load_model_and_tokenizer
+
 class MemoryBankTrainer(Trainer):
+
+    def __init__(self, loss_type, loss_alpha, temperature, **kwargs):
+        self.loss_type = loss_type
+        self.alpha = loss_alpha
+        self.T = temperature
+        super().__init__(**kwargs)
+
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=0):
         """
         Custom loss function for self-oracle training of the memory bank.
@@ -31,27 +39,47 @@ class MemoryBankTrainer(Trainer):
         )
 
         # KL-Divergence Loss
-        loss_fct = torch.nn.KLDivLoss(reduction="batchmean")
+        kl_loss_fct = torch.nn.KLDivLoss(reduction="batchmean")
+        ce_loss_fct = torch.nn.CrossEntropyLoss()
         log_softmax = torch.nn.LogSoftmax(dim=-1)
         softmax = torch.nn.Softmax(dim=-1)
 
         oracle_logits = oracle_outputs.logits.detach()
         memory_logits = memory_outputs.logits
 
-        loss = loss_fct(
-            log_softmax(memory_logits),
-            softmax(oracle_logits)
-        )
+        kl_loss = kl_loss_fct(
+            log_softmax(memory_logits / self.T),
+            softmax(oracle_logits / self.T)
+        ) * (self.T**2)
+
+        ce_loss = ce_loss_fct(memory_logits, oracle_logits.argmax(dim=1))
+
+        #print()
+        #print(oracle_logits)
+        #print(memory_logits)
+        #print()
+        #print(kl_loss.item(), ce_loss.item(), self.alpha)
+        #print()
+        #1/0
+
+        if self.loss_type == "balanced":
+            loss = self.alpha * kl_loss + (1 - self.alpha) * ce_loss
+        elif self.loss_type == "kl_divergence":
+            loss = kl_loss
+        elif self.loss_type == "cross_entropy":
+            loss = ce_loss
 
         return (loss, memory_outputs) if return_outputs else loss
 
 
 class ExtrinsicValidationCallback(TrainerCallback):
+    
     def __init__(self, eval_dataset, tokenizer, model, script_args):
         self.eval_dataset = eval_dataset
         self.tokenizer = tokenizer
         self.model = model
         self.script_args = script_args
+
     def on_evaluate(self, args, state, control, metrics=None, **kwargs):
         model = self.model
         tokenizer = self.tokenizer
@@ -125,6 +153,7 @@ def main():
     # Model and Tokenizer
     parser.add_argument("--base_model_path", type=str, required=True, help="Path to the base model checkpoint.")
     parser.add_argument("--adapter_path", type=str, help="Path to the fine-tuned adapter checkpoint.")
+    parser.add_argument("--precision", type=str, default="bf16", choices=["fp32", "fp16", "bf16"], help="The precision to use for model loading.")
 
     # Memory Bank Configuration
     parser.add_argument("--num_virtual_tokens", type=int, default=20, help="Number of virtual tokens for the memory bank.")
@@ -140,6 +169,9 @@ def main():
     # Training Arguments
     parser.add_argument("--output_dir", type=str, required=True, help="Directory to save the trained memory bank.")
     parser.add_argument("--learning_rate", type=float, default=1e-3)
+    parser.add_argument("--temperature", type=float, default=1, help="Temperature of the KLDiv loss.")
+    parser.add_argument("--loss_type", type=str, default="balanced", choices=["balanced", "kl_divergence", "cross_entropy"], help="The type of loss used for training.")
+    parser.add_argument("--loss_alpha", type=float, default=0.5, help="Weight of soft labels when calculating memory loss.")
     parser.add_argument("--num_train_epochs", type=int, default=10)
     parser.add_argument("--per_device_train_batch_size", type=int, default=1)
     parser.add_argument("--gradient_accumulation_steps", type=int, default=4, help="Number of updates steps to accumulate before performing a backward/update pass.")
@@ -171,10 +203,13 @@ def main():
     )
 
     # Load model and tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(args.base_model_path)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
+    model, tokenizer = load_model_and_tokenizer(
+        model_path=args.base_model_path,
+        adapter_path=args.adapter_path,
+        precision=args.precision
+    )
 
+    # Restore dynamic virtual token count logic
     if args.match_token_count:
         if args.prompt_tuning_init == "TEXT" and args.prompt_tuning_init_text:
             num_tokens = len(tokenizer(args.prompt_tuning_init_text)["input_ids"])
@@ -183,10 +218,6 @@ def main():
         else:
             print("Warning: --match_token_count is only applicable when using --prompt_tuning_init=TEXT and providing --prompt_tuning_init_text.")
 
-    model = AutoModelForCausalLM.from_pretrained(args.base_model_path)
-
-    if args.adapter_path:
-        model = PeftModel.from_pretrained(model, args.adapter_path)
 
     # Initialize PEFT config for Prompt Tuning
     peft_config = PromptTuningConfig(
@@ -197,7 +228,15 @@ def main():
         tokenizer_name_or_path=args.base_model_path
     )
 
+    # peft_config = PrefixTuningConfig(
+    #     task_type=TaskType.CAUSAL_LM,
+    #     num_virtual_tokens=args.num_virtual_tokens,
+    #     inference_mode=False,
+    #     prefix_projection=True,
+    # )
+
     model = get_peft_model(model, peft_config)
+    model.print_trainable_parameters()
 
     # Load and preprocess the data
     dataset = load_dataset("json", data_files=args.task_data_file)["train"]
@@ -278,6 +317,9 @@ def main():
     # Initialize the MemoryBankTrainer
     trainer = MemoryBankTrainer(
         model=model,
+        loss_type=args.loss_type,
+        loss_alpha=args.loss_alpha,
+        temperature=args.temperature,
         args=training_args,
         train_dataset=trainer_dataset, # Use the clean dataset for the trainer
         eval_dataset=trainer_dataset,   # Use the clean dataset for the trainer
