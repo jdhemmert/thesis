@@ -1,0 +1,22 @@
+[project]
+name = "thesis"
+version = "0.1.0"
+description = "Master's Thesis Project"
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+dependencies = [
+    "torch",
+    "transformers",
+    "peft",
+    "accelerate",
+    "datasets",
+    "pandas",
+    "jupyter",
+    "tqdm",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
