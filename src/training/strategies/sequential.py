@@ -1,19 +1,19 @@
 from transformers import Trainer, TrainingArguments
 
-def train_sequential(args, model, train_tokenized_dataset, test_tokenized_dataset, max_steps):
+def train_sequential(cfg, model, train_tokenized_dataset, test_tokenized_dataset, max_steps):
     # Set up the training arguments
     training_args = TrainingArguments(
-        output_dir=args.output_dir,
-        logging_dir=args.log_dir,
-        per_device_train_batch_size=args.physical_batch_size,
-        gradient_accumulation_steps=args.accumulation_steps,
-        num_train_epochs=args.epochs,
+        output_dir=cfg.output_dir,
+        logging_dir=cfg.log_dir,
+        per_device_train_batch_size=cfg.dataset.physical_batch_size,
+        gradient_accumulation_steps=cfg.dataset.accumulation_steps,
+        num_train_epochs=cfg.epochs,
         max_steps=max_steps,
         logging_steps=100,
         save_steps=1000,
         eval_strategy="steps",
-        eval_steps=args.eval_steps,
-        seed=args.seed,
+        eval_steps=cfg.eval_steps,
+        seed=cfg.seed,
         ddp_find_unused_parameters=False,
     )
 

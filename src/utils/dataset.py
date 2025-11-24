@@ -2,11 +2,11 @@ from datasets import load_dataset
 import os
 import math
 
-def get_tokenized_datasets(args, tokenizer):
+def get_tokenized_datasets(cfg, tokenizer):
     def preprocess_function(examples):
         # Combine prompt and answer, then tokenize
         full_prompts = [f"Biography: {bio}\nQuestion: {q}\nAnswer: {a}" for bio, q, a in zip(examples["biography"], examples["question"], examples["answer"])]
-        model_inputs = tokenizer(full_prompts, max_length=args.max_seq_length, padding="max_length", truncation=True)
+        model_inputs = tokenizer(full_prompts, max_length=cfg.max_seq_length, padding="max_length", truncation=True)
 
         # The labels are the same as the input_ids
         labels = [row[:] for row in model_inputs["input_ids"]]
@@ -24,9 +24,9 @@ def get_tokenized_datasets(args, tokenizer):
         return model_inputs
 
     max_steps = -1
-    if args.streaming:
-        full_dataset = load_dataset("json", data_files=args.dataset_file, streaming=True)["train"]
-        shuffled_dataset = full_dataset.shuffle(seed=args.seed, buffer_size=10000) # for reproducibility
+    if cfg.dataset.streaming:
+        full_dataset = load_dataset("json", data_files=cfg.dataset.dataset_file, streaming=True)["train"]
+        shuffled_dataset = full_dataset.shuffle(seed=cfg.seed, buffer_size=10000) # for reproducibility
 
         # train_test_split is not available for streaming datasets.
         # We'll manually split it.
@@ -36,8 +36,8 @@ def get_tokenized_datasets(args, tokenizer):
                     pass
             return i + 1
 
-        dataset_size = get_dataset_size(args.dataset_file)
-        test_size = int(dataset_size * args.test_split_ratio)
+        dataset_size = get_dataset_size(cfg.dataset.dataset_file)
+        test_size = int(dataset_size * cfg.dataset.test_split_ratio)
 
         test_dataset = shuffled_dataset.take(test_size)
         train_dataset = shuffled_dataset.skip(test_size)
@@ -47,12 +47,12 @@ def get_tokenized_datasets(args, tokenizer):
 
         # calculate max_steps for streaming dataset
         train_size = dataset_size - test_size
-        effective_batch_size = args.physical_batch_size * args.accumulation_steps
-        max_steps = math.ceil(train_size / effective_batch_size) * args.epochs
+        effective_batch_size = cfg.dataset.physical_batch_size * cfg.dataset.accumulation_steps
+        max_steps = math.ceil(train_size / effective_batch_size) * cfg.epochs
     else:
-        full_dataset = load_dataset("json", data_files=args.dataset_file)["train"]
-        shuffled_dataset = full_dataset.shuffle(seed=args.seed) # for reproducibility
-        split_dataset = shuffled_dataset.train_test_split(test_size=args.test_split_ratio)
+        full_dataset = load_dataset("json", data_files=cfg.dataset.dataset_file)["train"]
+        shuffled_dataset = full_dataset.shuffle(seed=cfg.seed) # for reproducibility
+        split_dataset = shuffled_dataset.train_test_split(test_size=cfg.dataset.test_split_ratio)
         train_dataset = split_dataset["train"]
         test_dataset = split_dataset["test"]
 

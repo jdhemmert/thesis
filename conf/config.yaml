@@ -1,0 +1,14 @@
+defaults:
+  - model: llama3_base
+  - peft: lora
+  - dataset: qa_finetune_12k
+
+output_dir: "models/finetuned_model"
+log_dir: "logs"
+seed: 42
+gpu_ids: ""
+epochs: 3
+precision: "bf16"
+max_seq_length: 128
+eval_steps: 1000
+strategy: "sequential"
