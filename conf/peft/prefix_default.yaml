@@ -1,0 +1,4 @@
+_target_: peft.PrefixTuningConfig
+task_type: "CAUSAL_LM"
+inference_mode: False
+num_virtual_tokens: 20

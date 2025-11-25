@@ -1,6 +1,21 @@
 from transformers import Trainer, TrainingArguments
+from peft import get_peft_model
+import hydra.utils
 
-def train_sequential(cfg, model, train_tokenized_dataset, test_tokenized_dataset, max_steps):
+def train_sequential(cfg, base_model, tokenizer, train_tokenized_dataset, test_tokenized_dataset, max_steps):
+    if cfg.peft.method == "lora":
+        peft_config = hydra.utils.instantiate(cfg.peft.lora)
+        model = get_peft_model(base_model, peft_config)
+
+    elif cfg.peft.method == "prefix":
+        peft_config = hydra.utils.instantiate(cfg.peft.prefix)
+        model = get_peft_model(base_model, peft_config)
+    elif cfg.peft.method == "prompt":
+        peft_config = hydra.utils.instantiate(cfg.peft.prompt)
+        model = get_peft_model(base_model, peft_config)
+    else:
+        model = base_model
+        
     # Set up the training arguments
     training_args = TrainingArguments(
         output_dir=cfg.output_dir,

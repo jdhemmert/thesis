@@ -31,7 +31,7 @@ def main(cfg: DictConfig):
 
     train_tokenized_dataset, test_tokenized_dataset, max_steps = get_tokenized_datasets(cfg, tokenizer)
 
-    model = create_model(cfg, tokenizer)
+    base_model = create_model(cfg, tokenizer)
 
     strategies = {
         "sequential": train_sequential,
@@ -39,7 +39,7 @@ def main(cfg: DictConfig):
     }
 
     if cfg.strategy in strategies:
-        strategies[cfg.strategy](cfg, model, train_tokenized_dataset, test_tokenized_dataset, max_steps)
+        strategies[cfg.strategy](cfg, base_model, tokenizer, train_tokenized_dataset, test_tokenized_dataset, max_steps)
     else:
         raise ValueError(f"Unknown strategy: {cfg.strategy}")
 

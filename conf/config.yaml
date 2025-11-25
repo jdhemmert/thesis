@@ -1,7 +1,8 @@
 defaults:
   - model: llama3_base
-  - peft: lora
+  - peft: default
   - dataset: qa_finetune_12k
+  - training: _self_
 
 output_dir: "models/finetuned_model"
 log_dir: "logs"
@@ -11,4 +12,5 @@ epochs: 3
 precision: "bf16"
 max_seq_length: 128
 eval_steps: 1000
+learning_rate: 2e-4
 strategy: "sequential"
