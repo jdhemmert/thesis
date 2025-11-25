@@ -14,7 +14,7 @@ load_dotenv()
 from src.utils.dataset import get_tokenized_datasets
 from .models import create_model
 from .strategies.sequential import train_sequential
-from .strategies.interleaved import train_interleaved
+from .strategies.meta import train_meta
 
 @hydra.main(config_path="../../conf", config_name="config")
 def main(cfg: DictConfig):
@@ -35,7 +35,7 @@ def main(cfg: DictConfig):
 
     strategies = {
         "sequential": train_sequential,
-        "interleaved": train_interleaved,
+        "meta": train_meta,
     }
 
     if cfg.strategy in strategies:
