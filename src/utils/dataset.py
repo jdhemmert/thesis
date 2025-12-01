@@ -6,7 +6,7 @@ def get_tokenized_datasets(cfg, tokenizer):
     def preprocess_function(examples):
         # Combine prompt and answer, then tokenize
         full_prompts = [f"Biography: {bio}\nQuestion: {q}\nAnswer: {a}" for bio, q, a in zip(examples["biography"], examples["question"], examples["answer"])]
-        model_inputs = tokenizer(full_prompts, max_length=cfg.max_seq_length, padding="max_length", truncation=True)
+        model_inputs = tokenizer(full_prompts, max_length=cfg.task.max_seq_length, padding="max_length", truncation=True)
 
         # The labels are the same as the input_ids
         labels = [row[:] for row in model_inputs["input_ids"]]
@@ -26,7 +26,7 @@ def get_tokenized_datasets(cfg, tokenizer):
     max_steps = -1
     if cfg.dataset.streaming:
         full_dataset = load_dataset("json", data_files=cfg.dataset.dataset_file, streaming=True)["train"]
-        shuffled_dataset = full_dataset.shuffle(seed=cfg.seed, buffer_size=10000) # for reproducibility
+        shuffled_dataset = full_dataset.shuffle(seed=cfg.task.seed, buffer_size=10000) # for reproducibility
 
         # train_test_split is not available for streaming datasets.
         # We'll manually split it.
@@ -48,10 +48,10 @@ def get_tokenized_datasets(cfg, tokenizer):
         # calculate max_steps for streaming dataset
         train_size = dataset_size - test_size
         effective_batch_size = cfg.dataset.physical_batch_size * cfg.dataset.accumulation_steps
-        max_steps = math.ceil(train_size / effective_batch_size) * cfg.epochs
+        max_steps = math.ceil(train_size / effective_batch_size) * cfg.task.epochs
     else:
         full_dataset = load_dataset("json", data_files=cfg.dataset.dataset_file)["train"]
-        shuffled_dataset = full_dataset.shuffle(seed=cfg.seed) # for reproducibility
+        shuffled_dataset = full_dataset.shuffle(seed=cfg.task.seed) # for reproducibility
         split_dataset = shuffled_dataset.train_test_split(test_size=cfg.dataset.test_split_ratio)
         train_dataset = split_dataset["train"]
         test_dataset = split_dataset["test"]

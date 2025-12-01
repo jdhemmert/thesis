@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/home/jhemmer/projects/thesis/src/eval/evaluate_finetune.py", line 8, in <module>
+    from src.utils.model import load_model_and_tokenizer
+ModuleNotFoundError: No module named 'src'
