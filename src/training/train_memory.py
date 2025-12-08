@@ -8,6 +8,8 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, Trainer, TrainingA
 from datasets import load_dataset
 from peft import get_peft_model, PrefixTuningConfig, PromptTuningConfig, TaskType, PromptTuningInit, PeftModel
 from accelerate import Accelerator
+import hydra
+from omegaconf import DictConfig
 
 from src.utils.model import load_model_and_tokenizer
 from src.training.losses import self_distillation_loss
@@ -52,14 +54,13 @@ class MemoryBankTrainer(Trainer):
 
 class ExtrinsicValidationCallback(TrainerCallback):
     
-    def __init__(self, eval_dataset, tokenizer, model, script_args):
+    def __init__(self, eval_dataset, tokenizer, cfg_task):
         self.eval_dataset = eval_dataset
         self.tokenizer = tokenizer
-        self.model = model
-        self.script_args = script_args
+        self.cfg_task = cfg_task
 
     def on_evaluate(self, args, state, control, metrics=None, **kwargs):
-        model = self.model
+        model = kwargs.get("model")
         tokenizer = self.tokenizer
         eval_dataset = self.eval_dataset
 
@@ -88,7 +89,8 @@ class ExtrinsicValidationCallback(TrainerCallback):
                     input_ids=input_ids,
                     attention_mask=attention_mask,
                     max_new_tokens=50,
-                    pad_token_id=0, eos_token_id=None
+                    pad_token_id=tokenizer.pad_token_id,
+                    eos_token_id=tokenizer.eos_token_id
                 )
 
             num_input_tokens = len(input_ids[0])
@@ -110,11 +112,11 @@ class ExtrinsicValidationCallback(TrainerCallback):
                 metrics[f"eval_{key}"] = value
 
         # Explicitly print ROUGE scores to console if control.log_metrics is not available
-        print(f"Extrinsic ROUGE Scores: {rouge_scores}")
+            print(f"Extrinsic ROUGE Scores: {rouge_scores}")
 
         # Log predictions to file
-        if state.is_world_process_zero and self.script_args.log_predictions:
-            log_file_path = os.path.join(self.script_args.output_dir, f"prediction_log.epoch_{int(state.epoch)}.jsonl")
+        if state.is_world_process_zero and self.cfg_task.log_predictions:
+            log_file_path = os.path.join(self.cfg_task.output_dir, f"prediction_log.epoch_{int(state.epoch)}.jsonl")
             print(f"Logging predictions to {log_file_path}")
             with open(log_file_path, "w") as f:
                 for i in range(len(all_preds)):
@@ -125,105 +127,62 @@ class ExtrinsicValidationCallback(TrainerCallback):
                     }
                     f.write(json.dumps(log_entry) + "\n")
 
-def main():
-    parser = argparse.ArgumentParser(description="Train a memory bank on a given biography.")
-
-    # Model and Tokenizer
-    parser.add_argument("--base_model_path", type=str, required=True, help="Path to the base model checkpoint.")
-    parser.add_argument("--adapter_path", type=str, help="Path to the fine-tuned adapter checkpoint.")
-    parser.add_argument("--precision", type=str, default="bf16", choices=["fp32", "fp16", "bf16"], help="The precision to use for model loading.")
-
-    # Memory Bank Configuration
-    parser.add_argument("--num_virtual_tokens", type=int, default=20, help="Number of virtual tokens for the memory bank.")
-    parser.add_argument("--prompt_tuning_init", type=str, default="TEXT", choices=["TEXT", "RANDOM"], help="Initialization method for the memory bank.")
-    parser.add_argument("--prompt_tuning_init_text", type=str, default="", help="Initialization text for the memory bank if using TEXT initialization.")
-    parser.add_argument("--match_token_count", action="store_true", help="Automatically set num_virtual_tokens to the length of the init text.")
-
-    # Data
-    parser.add_argument("--task_data_file", type=str, required=True, help="Path to the JSONL file.")
-    parser.add_argument("--sample_n", type=int, help="Number of samples to use from the dataset.")
-    parser.add_argument("--sample_strategy", type=str, default="first_n", choices=["first_n", "random"], help="How to select samples if --sample_n is used.")
-
-    # Training Arguments
-    parser.add_argument("--output_dir", type=str, required=True, help="Directory to save the trained memory bank.")
-    parser.add_argument("--learning_rate", type=float, default=1e-3)
-    parser.add_argument("--temperature", type=float, default=1, help="Temperature of the KLDiv loss.")
-    parser.add_argument("--loss_type", type=str, default="balanced", choices=["balanced", "kl_divergence", "cross_entropy"], help="The type of loss used for training.")
-    parser.add_argument("--loss_alpha", type=float, default=0.5, help="Weight of soft labels when calculating memory loss.")
-    parser.add_argument("--num_train_epochs", type=int, default=10)
-    parser.add_argument("--per_device_train_batch_size", type=int, default=1)
-    parser.add_argument("--gradient_accumulation_steps", type=int, default=4, help="Number of updates steps to accumulate before performing a backward/update pass.")
-    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility.")
-    parser.add_argument("--max_length", type=int, default=128, help="Maximum sequence length for tokenizer.")
-    parser.add_argument("--eval_strategy", type=str, default="epoch", choices=["no", "steps", "epoch"], help="Evaluation strategy to adopt during training.")
-    parser.add_argument("--eval_steps", type=int, default=1, help="Number of update steps between two evaluations if evaluation_strategy is 'steps'.")
-    parser.add_argument("--save_strategy", type=str, default="no", choices=["no", "steps", "epoch"], help="When to save a model checkpoint.")
-    parser.add_argument("--save_steps", type=int, default=500, help="Number of update steps for checkpointing.")
-    parser.add_argument("--log_predictions", action="store_true", help="Log model predictions to a file during evaluation.")
-
-    args = parser.parse_args()
+@hydra.main(version_base=None, config_path="../../conf", config_name="config")
+def main(cfg: DictConfig):
+    # Access train_memory specific configurations
+    cfg_task = cfg.task
 
     accelerator = Accelerator()
 
     # Set up TrainingArguments
     training_args = TrainingArguments(
-        output_dir=args.output_dir,
-        learning_rate=args.learning_rate,
-        num_train_epochs=args.num_train_epochs,
-        per_device_train_batch_size=args.per_device_train_batch_size,
-        gradient_accumulation_steps=args.gradient_accumulation_steps,
-        seed=args.seed,
+        output_dir=cfg_task.output_dir,
+        learning_rate=cfg_task.learning_rate,
+        num_train_epochs=cfg_task.num_train_epochs,
+        per_device_train_batch_size=cfg_task.per_device_train_batch_size,
+        gradient_accumulation_steps=cfg_task.gradient_accumulation_steps,
+        seed=cfg_task.seed,
         remove_unused_columns=False,
         ddp_find_unused_parameters=False,
-        eval_strategy=args.eval_strategy,
-        eval_steps=args.eval_steps,
-        save_strategy=args.save_strategy,
+        eval_strategy=cfg_task.eval_strategy,
+        eval_steps=cfg_task.eval_steps,
+        save_strategy=cfg_task.save_strategy,
     )
 
     # Load model and tokenizer
     model, tokenizer = load_model_and_tokenizer(
-        model_path=args.base_model_path,
-        adapter_path=args.adapter_path,
-        precision=args.precision
+        model_path=cfg_task.base_model_path,
+        adapter_path=cfg_task.adapter_path,
+        precision=cfg_task.precision
     )
+    
+    # Initialize PEFT config for Memory Bank
+    # Use hydra.utils.instantiate to create the PEFT config from the chosen 'peft' group
+    peft_method = cfg_task.peft_method
+    peft_config_to_instantiate = getattr(cfg.peft, peft_method)
+    peft_config = hydra.utils.instantiate(peft_config_to_instantiate, tokenizer_name_or_path=cfg_task.base_model_path)
 
-    # Restore dynamic virtual token count logic
-    if args.match_token_count:
-        if args.prompt_tuning_init == "TEXT" and args.prompt_tuning_init_text:
-            num_tokens = len(tokenizer(args.prompt_tuning_init_text)["input_ids"])
-            print(f"Matching token count: Overriding num_virtual_tokens to {num_tokens}")
-            args.num_virtual_tokens = num_tokens
-        else:
-            print("Warning: --match_token_count is only applicable when using --prompt_tuning_init=TEXT and providing --prompt_tuning_init_text.")
-
-
-    # Initialize PEFT config for Prompt Tuning
-    peft_config = PromptTuningConfig(
-        task_type=TaskType.CAUSAL_LM,
-        prompt_tuning_init=PromptTuningInit.TEXT if args.prompt_tuning_init == "TEXT" else PromptTuningInit.RANDOM,
-        prompt_tuning_init_text=args.prompt_tuning_init_text,
-        num_virtual_tokens=args.num_virtual_tokens,
-        tokenizer_name_or_path=args.base_model_path
-    )
-
-    # peft_config = PrefixTuningConfig(
-    #     task_type=TaskType.CAUSAL_LM,
-    #     num_virtual_tokens=args.num_virtual_tokens,
-    #     inference_mode=False,
-    #     prefix_projection=True,
-    # )
+    # Restore dynamic virtual token count logic for Prompt Tuning, if selected
+    if (
+        cfg_task.match_token_count and 
+        isinstance(peft_config, PromptTuningConfig) and
+        peft_config.prompt_tuning_init == PromptTuningInit.TEXT
+    ):
+        num_tokens = len(tokenizer(peft_config.prompt_tuning_init_text)["input_ids"])
+        print(f"Matching token count: Overriding num_virtual_tokens to {num_tokens}")
+        peft_config.num_virtual_tokens = num_tokens
 
     model = get_peft_model(model, peft_config)
     model.print_trainable_parameters()
 
     # Load and preprocess the data
-    dataset = load_dataset("json", data_files=args.task_data_file)["train"]
+    dataset = load_dataset("json", data_files=cfg_task.task_data_file)["train"]
 
-    if args.sample_n:
-        if args.sample_strategy == 'random':
-            dataset = dataset.shuffle(seed=training_args.seed).select(range(args.sample_n))
+    if cfg_task.sample_n:
+        if cfg_task.sample_strategy == 'random':
+            dataset = dataset.shuffle(seed=training_args.seed).select(range(cfg_task.sample_n))
         else: # first_n
-            dataset = dataset.select(range(args.sample_n))
+            dataset = dataset.select(range(cfg_task.sample_n))
 
     # Check if the dataset needs to be transformed
     if "biography" in dataset.column_names and "question" in dataset.column_names:
@@ -237,8 +196,8 @@ def main():
         dataset = dataset.map(transform_to_prompts, batched=True)
 
     def preprocess_function(examples):
-        oracle_inputs = tokenizer(examples["oracle_prompt"], padding="max_length", truncation=True, max_length=args.max_length)
-        memory_inputs = tokenizer(examples["memory_prompt"], padding="max_length", truncation=True, max_length=args.max_length)
+        oracle_inputs = tokenizer(examples["oracle_prompt"], truncation=True, max_length=cfg_task.max_length)
+        memory_inputs = tokenizer(examples["memory_prompt"], truncation=True, max_length=cfg_task.max_length)
 
         # The 'labels' field is the switch that tells the Trainer to use compute_loss during evaluation.
         return {
@@ -253,30 +212,41 @@ def main():
 
     # Create a custom data collator to handle the unique batch structure
     def custom_data_collator(features):
-        # Process oracle inputs
+        # Determine the maximum sequence length in the batch across both oracle and memory inputs
+        max_len = 0
+        for feature in features:
+            max_len = max(max_len, len(feature["oracle_input_ids"]))
+            max_len = max(max_len, len(feature["memory_input_ids"]))
+
+        # Pad oracle inputs to the determined max_len
         oracle_batch = tokenizer.pad(
             {
                 "input_ids": [f["oracle_input_ids"] for f in features],
                 "attention_mask": [f["oracle_attention_mask"] for f in features]
             },
-            padding=True,
+            padding='max_length',
+            max_length=max_len,
             return_tensors="pt"
         )
 
-        # Process memory inputs
+        # Pad memory inputs to the determined max_len
         memory_batch = tokenizer.pad(
             {
                 "input_ids": [f["memory_input_ids"] for f in features],
                 "attention_mask": [f["memory_attention_mask"] for f in features]
             },
-            padding=True,
+            padding='max_length',
+            max_length=max_len,
             return_tensors="pt"
         )
 
-        # Process labels
+        # Labels should also be padded to the same max_len
         labels_batch = tokenizer.pad(
-            {"input_ids": [f["labels"] for f in features]},
-            padding=True,
+            {
+                "input_ids": [f["labels"] for f in features]
+            },
+            padding='max_length',
+            max_length=max_len,
             return_tensors="pt"
         )
 
@@ -295,19 +265,16 @@ def main():
     # Initialize the MemoryBankTrainer
     trainer = MemoryBankTrainer(
         model=model,
-        loss_type=args.loss_type,
-        loss_alpha=args.loss_alpha,
-        temperature=args.temperature,
+        loss_type=cfg_task.loss_type,
+        loss_alpha=cfg_task.loss_alpha,
+        temperature=cfg_task.temperature,
         args=training_args,
-        train_dataset=trainer_dataset, # Use the clean dataset for the trainer
-        eval_dataset=trainer_dataset,   # Use the clean dataset for the trainer
-        callbacks=[ExtrinsicValidationCallback(tokenized_dataset, tokenizer, model, args)], # Pass the full dataset to the callback
+        train_dataset=trainer_dataset,
+        eval_dataset=trainer_dataset,
+        callbacks=[ExtrinsicValidationCallback(tokenized_dataset, tokenizer, cfg_task)],
         tokenizer=tokenizer,
         data_collator=custom_data_collator,
     )
 
     trainer.train()
     trainer.save_model()
-
-if __name__ == "__main__":
-    main()
