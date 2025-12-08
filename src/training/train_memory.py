@@ -10,6 +10,7 @@ from peft import get_peft_model, PrefixTuningConfig, PromptTuningConfig, TaskTyp
 from accelerate import Accelerator
 
 from src.utils.model import load_model_and_tokenizer
+from src.training.losses import self_distillation_loss
 
 class MemoryBankTrainer(Trainer):
 
@@ -37,37 +38,14 @@ class MemoryBankTrainer(Trainer):
             attention_mask=inputs["memory_attention_mask"],
             labels=inputs["memory_input_ids"]
         )
-
-        # KL-Divergence Loss
-        kl_loss_fct = torch.nn.KLDivLoss(reduction="batchmean")
-        ce_loss_fct = torch.nn.CrossEntropyLoss()
-        log_softmax = torch.nn.LogSoftmax(dim=-1)
-        softmax = torch.nn.Softmax(dim=-1)
-
-        oracle_logits = oracle_outputs.logits.detach()
-        memory_logits = memory_outputs.logits
-
-        kl_loss = kl_loss_fct(
-            log_softmax(memory_logits / self.T),
-            softmax(oracle_logits / self.T)
-        ) * (self.T**2)
-
-        ce_loss = ce_loss_fct(memory_logits, oracle_logits.argmax(dim=1))
-
-        #print()
-        #print(oracle_logits)
-        #print(memory_logits)
-        #print()
-        #print(kl_loss.item(), ce_loss.item(), self.alpha)
-        #print()
-        #1/0
-
-        if self.loss_type == "balanced":
-            loss = self.alpha * kl_loss + (1 - self.alpha) * ce_loss
-        elif self.loss_type == "kl_divergence":
-            loss = kl_loss
-        elif self.loss_type == "cross_entropy":
-            loss = ce_loss
+        
+        loss = self_distillation_loss(
+            oracle_logits=oracle_outputs.logits,
+            memory_logits=memory_outputs.logits,
+            temperature=self.T,
+            alpha=self.alpha,
+            loss_type=self.loss_type
+        )
 
         return (loss, memory_outputs) if return_outputs else loss
 
