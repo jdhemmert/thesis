@@ -1,0 +1,19 @@
+defaults:
+  - strategy/memory_bank: prompt_default
+  - strategy/lora_adapter: lora_default
+  - _self_
+
+name: "train_memory"
+output_dir: "models/memory_model"
+learning_rate: 2e-4
+
+strategy:
+  name: "meta"
+  
+  memory_bank: ???
+  lora_adapter: ???
+
+  meta_training:
+    inner_learning_rate: 1e-3
+    outer_learning_rate: ${..learning_rate}
+    num_inner_steps: 5
