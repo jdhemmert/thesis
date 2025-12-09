@@ -6,6 +6,18 @@ defaults:
 name: "train_memory"
 output_dir: "models/memory_model"
 learning_rate: 2e-4
+num_train_epochs: 3
+precision: "bf16"
+seed: 42
+max_length: 512
+eval_steps: 100
+sample_n: 1000
+log_predictions: true
+
+loss:
+  loss_type: "balanced"
+  alpha: 0.2
+  temperature: 0.5
 
 strategy:
   name: "meta"

@@ -13,6 +13,7 @@ from omegaconf import DictConfig
 
 from src.utils.model import load_model_and_tokenizer
 from src.training.losses import self_distillation_loss
+from src.training.strategies.meta import train_meta
 
 class MemoryBankTrainer(Trainer):
 
@@ -134,147 +135,108 @@ def main(cfg: DictConfig):
 
     accelerator = Accelerator()
 
-    # Set up TrainingArguments
-    training_args = TrainingArguments(
-        output_dir=cfg_task.output_dir,
-        learning_rate=cfg_task.learning_rate,
-        num_train_epochs=cfg_task.num_train_epochs,
-        per_device_train_batch_size=cfg_task.per_device_train_batch_size,
-        gradient_accumulation_steps=cfg_task.gradient_accumulation_steps,
-        seed=cfg_task.seed,
-        remove_unused_columns=False,
-        ddp_find_unused_parameters=False,
-        eval_strategy=cfg_task.eval_strategy,
-        eval_steps=cfg_task.eval_steps,
-        save_strategy=cfg_task.save_strategy,
-    )
-
     # Load model and tokenizer
-    model, tokenizer = load_model_and_tokenizer(
-        model_path=cfg_task.base_model_path,
-        adapter_path=cfg_task.adapter_path,
-        precision=cfg_task.precision
-    )
+    # For meta-learning, we need to load the model with multiple adapters
+    if cfg_task.strategy.name == "meta":
+        lora_config = hydra.utils.instantiate(cfg_task.strategy.lora_adapter)
+        memory_config = hydra.utils.instantiate(cfg_task.strategy.memory_bank)
+        model, tokenizer = load_model_and_tokenizer(
+            model_path=cfg.model.path,
+            precision=cfg.task.precision,
+            lora_config=lora_config,
+            memory_config=memory_config
+        )
+    else:
+        model, tokenizer = load_model_and_tokenizer(
+            model_path=cfg.model.path,
+            precision=cfg.task.precision
+        )
+        peft_config = hydra.utils.instantiate(cfg_task.peft, tokenizer_name_or_path=cfg.model.path)
+        model = get_peft_model(model, peft_config)
     
-    # Initialize PEFT config for Memory Bank
-    # Use hydra.utils.instantiate to create the PEFT config from the chosen 'peft' group
-    peft_method = cfg_task.peft_method
-    peft_config_to_instantiate = getattr(cfg.peft, peft_method)
-    peft_config = hydra.utils.instantiate(peft_config_to_instantiate, tokenizer_name_or_path=cfg_task.base_model_path)
-
-    # Restore dynamic virtual token count logic for Prompt Tuning, if selected
-    if (
-        cfg_task.match_token_count and 
-        isinstance(peft_config, PromptTuningConfig) and
-        peft_config.prompt_tuning_init == PromptTuningInit.TEXT
-    ):
-        num_tokens = len(tokenizer(peft_config.prompt_tuning_init_text)["input_ids"])
-        print(f"Matching token count: Overriding num_virtual_tokens to {num_tokens}")
-        peft_config.num_virtual_tokens = num_tokens
-
-    model = get_peft_model(model, peft_config)
     model.print_trainable_parameters()
 
     # Load and preprocess the data
-    dataset = load_dataset("json", data_files=cfg_task.task_data_file)["train"]
+    dataset = load_dataset("json", data_files=cfg.dataset.path)["train"]
 
     if cfg_task.sample_n:
-        if cfg_task.sample_strategy == 'random':
-            dataset = dataset.shuffle(seed=training_args.seed).select(range(cfg_task.sample_n))
+        if cfg.dataset.sample_strategy == 'random':
+            dataset = dataset.shuffle(seed=cfg_task.seed).select(range(cfg_task.sample_n))
         else: # first_n
             dataset = dataset.select(range(cfg_task.sample_n))
 
-    # Check if the dataset needs to be transformed
-    if "biography" in dataset.column_names and "question" in dataset.column_names:
-        def transform_to_prompts(examples):
-            oracle_prompts = []
-            memory_prompts = []
-            for i in range(len(examples['biography'])):
-                oracle_prompts.append(f"Biography: {examples['biography'][i]}\nQuestion: {examples['question'][i]}")
-                memory_prompts.append(f"Question: {examples['question'][i]}")
-            return {"oracle_prompt": oracle_prompts, "memory_prompt": memory_prompts}
-        dataset = dataset.map(transform_to_prompts, batched=True)
+    # STRATEGY DISPATCH
+    if cfg_task.strategy.name == "meta":
+        print("Using meta-learning strategy.")
+        # Meta-learning strategy requires a different data handling and training loop
+        train_meta(cfg, model, dataset, tokenizer)
+    else:
+        print("Using standard fine-tuning strategy.")
+        # The existing MemoryBankTrainer logic
+        training_args = TrainingArguments(
+            output_dir=cfg_task.output_dir,
+            learning_rate=cfg_task.learning_rate,
+            num_train_epochs=cfg_task.num_train_epochs,
+            per_device_train_batch_size=cfg.dataset.physical_batch_size,
+            gradient_accumulation_steps=cfg.dataset.accumulation_steps,
+            seed=cfg_task.seed,
+            remove_unused_columns=False,
+            ddp_find_unused_parameters=False,
+            evaluation_strategy="steps",
+            eval_steps=cfg_task.eval_steps,
+            save_strategy="steps",
+        )
+        
+        if "biography" in dataset.column_names and "question" in dataset.column_names:
+            def transform_to_prompts(examples):
+                oracle_prompts = []
+                memory_prompts = []
+                for i in range(len(examples['biography'])):
+                    oracle_prompts.append(f"Biography: {examples['biography'][i]}\nQuestion: {examples['question'][i]}")
+                    memory_prompts.append(f"Question: {examples['question'][i]}")
+                return {"oracle_prompt": oracle_prompts, "memory_prompt": memory_prompts}
+            dataset = dataset.map(transform_to_prompts, batched=True)
 
-    def preprocess_function(examples):
-        oracle_inputs = tokenizer(examples["oracle_prompt"], truncation=True, max_length=cfg_task.max_length)
-        memory_inputs = tokenizer(examples["memory_prompt"], truncation=True, max_length=cfg_task.max_length)
+        def preprocess_function(examples):
+            oracle_inputs = tokenizer(examples["oracle_prompt"], truncation=True, max_length=cfg_task.max_length)
+            memory_inputs = tokenizer(examples["memory_prompt"], truncation=True, max_length=cfg_task.max_length)
+            return {
+                "oracle_input_ids": oracle_inputs.input_ids,
+                "oracle_attention_mask": oracle_inputs.attention_mask,
+                "memory_input_ids": memory_inputs.input_ids,
+                "memory_attention_mask": memory_inputs.attention_mask,
+                "labels": memory_inputs.input_ids.copy(),
+            }
+        tokenized_dataset = dataset.map(preprocess_function, batched=True)
 
-        # The 'labels' field is the switch that tells the Trainer to use compute_loss during evaluation.
-        return {
-            "oracle_input_ids": oracle_inputs.input_ids,
-            "oracle_attention_mask": oracle_inputs.attention_mask,
-            "memory_input_ids": memory_inputs.input_ids,
-            "memory_attention_mask": memory_inputs.attention_mask,
-            "labels": memory_inputs.input_ids.copy(),
-        }
+        def custom_data_collator(features):
+            max_len = max(len(f["oracle_input_ids"]) for f in features)
+            max_len = max(max_len, max(len(f["memory_input_ids"]) for f in features))
 
-    tokenized_dataset = dataset.map(preprocess_function, batched=True)
+            oracle_batch = tokenizer.pad({"input_ids": [f["oracle_input_ids"] for f in features]}, padding='max_length', max_length=max_len, return_tensors="pt")
+            memory_batch = tokenizer.pad({"input_ids": [f["memory_input_ids"] for f in features]}, padding='max_length', max_length=max_len, return_tensors="pt")
+            labels_batch = tokenizer.pad({"input_ids": [f["labels"] for f in features]}, padding='max_length', max_length=max_len, return_tensors="pt")
 
-    # Create a custom data collator to handle the unique batch structure
-    def custom_data_collator(features):
-        # Determine the maximum sequence length in the batch across both oracle and memory inputs
-        max_len = 0
-        for feature in features:
-            max_len = max(max_len, len(feature["oracle_input_ids"]))
-            max_len = max(max_len, len(feature["memory_input_ids"]))
+            return {**oracle_batch, "memory_input_ids": memory_batch["input_ids"], "memory_attention_mask": memory_batch["attention_mask"], "labels": labels_batch["input_ids"]}
 
-        # Pad oracle inputs to the determined max_len
-        oracle_batch = tokenizer.pad(
-            {
-                "input_ids": [f["oracle_input_ids"] for f in features],
-                "attention_mask": [f["oracle_attention_mask"] for f in features]
-            },
-            padding='max_length',
-            max_length=max_len,
-            return_tensors="pt"
+        text_columns = ['question', 'answer', 'biography', 'oracle_prompt', 'memory_prompt']
+        trainer_dataset = tokenized_dataset.remove_columns([col for col in text_columns if col in tokenized_dataset.column_names])
+
+        trainer = MemoryBankTrainer(
+            model=model,
+            loss_type=cfg_task.loss.loss_type,
+            loss_alpha=cfg_task.loss.alpha,
+            temperature=cfg_task.loss.temperature,
+            args=training_args,
+            train_dataset=trainer_dataset,
+            eval_dataset=trainer_dataset,
+            callbacks=[ExtrinsicValidationCallback(tokenized_dataset, tokenizer, cfg_task)],
+            tokenizer=tokenizer,
+            data_collator=custom_data_collator,
         )
 
-        # Pad memory inputs to the determined max_len
-        memory_batch = tokenizer.pad(
-            {
-                "input_ids": [f["memory_input_ids"] for f in features],
-                "attention_mask": [f["memory_attention_mask"] for f in features]
-            },
-            padding='max_length',
-            max_length=max_len,
-            return_tensors="pt"
-        )
+        trainer.train()
+        trainer.save_model()
 
-        # Labels should also be padded to the same max_len
-        labels_batch = tokenizer.pad(
-            {
-                "input_ids": [f["labels"] for f in features]
-            },
-            padding='max_length',
-            max_length=max_len,
-            return_tensors="pt"
-        )
-
-        return {
-            "oracle_input_ids": oracle_batch["input_ids"],
-            "oracle_attention_mask": oracle_batch["attention_mask"],
-            "memory_input_ids": memory_batch["input_ids"],
-            "memory_attention_mask": memory_batch["attention_mask"],
-            "labels": labels_batch["input_ids"]
-        }
-
-    # Create a clean version of the dataset for the Trainer, which expects only tensor-izable columns
-    text_columns = ['question', 'answer', 'biography', 'oracle_prompt', 'memory_prompt']
-    trainer_dataset = tokenized_dataset.remove_columns([col for col in text_columns if col in tokenized_dataset.column_names])
-
-    # Initialize the MemoryBankTrainer
-    trainer = MemoryBankTrainer(
-        model=model,
-        loss_type=cfg_task.loss_type,
-        loss_alpha=cfg_task.loss_alpha,
-        temperature=cfg_task.temperature,
-        args=training_args,
-        train_dataset=trainer_dataset,
-        eval_dataset=trainer_dataset,
-        callbacks=[ExtrinsicValidationCallback(tokenized_dataset, tokenizer, cfg_task)],
-        tokenizer=tokenizer,
-        data_collator=custom_data_collator,
-    )
-
-    trainer.train()
-    trainer.save_model()
+if __name__ == "__main__":
+    main()
