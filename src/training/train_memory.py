@@ -183,7 +183,7 @@ def main(cfg: DictConfig):
             seed=cfg_task.seed,
             remove_unused_columns=False,
             ddp_find_unused_parameters=False,
-            evaluation_strategy="steps",
+            eval_strategy="steps",
             eval_steps=cfg_task.eval_steps,
             save_strategy="steps",
         )
