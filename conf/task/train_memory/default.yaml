@@ -13,6 +13,7 @@ seed: 42
 max_length: 512
 eval_steps: 100
 sample_n: 1000
+sample_strategy: 'random'
 log_predictions: true
 
 loss:

@@ -160,7 +160,7 @@ def main(cfg: DictConfig):
     dataset = load_dataset("json", data_files=cfg.dataset.path)["train"]
 
     if cfg_task.sample_n:
-        if cfg.dataset.sample_strategy == 'random':
+        if cfg_task.sample_strategy == 'random':
             dataset = dataset.shuffle(seed=cfg_task.seed).select(range(cfg_task.sample_n))
         else: # first_n
             dataset = dataset.select(range(cfg_task.sample_n))
