@@ -211,14 +211,34 @@ def main(cfg: DictConfig):
         tokenized_dataset = dataset.map(preprocess_function, batched=True)
 
         def custom_data_collator(features):
-            max_len = max(len(f["oracle_input_ids"]) for f in features)
-            max_len = max(max_len, max(len(f["memory_input_ids"]) for f in features))
+            max_len = max(max(len(f["oracle_input_ids"]) for f in features), max(len(f["memory_input_ids"]) for f in features))
 
-            oracle_batch = tokenizer.pad({"input_ids": [f["oracle_input_ids"] for f in features]}, padding='max_length', max_length=max_len, return_tensors="pt")
-            memory_batch = tokenizer.pad({"input_ids": [f["memory_input_ids"] for f in features]}, padding='max_length', max_length=max_len, return_tensors="pt")
-            labels_batch = tokenizer.pad({"input_ids": [f["labels"] for f in features]}, padding='max_length', max_length=max_len, return_tensors="pt")
+            oracle_batch = tokenizer.pad(
+                {"input_ids": [f["oracle_input_ids"] for f in features], "attention_mask": [f["oracle_attention_mask"] for f in features]},
+                padding='max_length', 
+                max_length=max_len, 
+                return_tensors="pt"
+            )
+            memory_batch = tokenizer.pad(
+                {"input_ids": [f["memory_input_ids"] for f in features], "attention_mask": [f["memory_attention_mask"] for f in features]},
+                padding='max_length', 
+                max_length=max_len, 
+                return_tensors="pt"
+            )
+            labels_batch = tokenizer.pad(
+                {"input_ids": [f["labels"] for f in features]}, 
+                padding='max_length', 
+                max_length=max_len, 
+                return_tensors="pt"
+            )
 
-            return {**oracle_batch, "memory_input_ids": memory_batch["input_ids"], "memory_attention_mask": memory_batch["attention_mask"], "labels": labels_batch["input_ids"]}
+            return {
+                "oracle_input_ids": oracle_batch["input_ids"],
+                "oracle_attention_mask": oracle_batch["attention_mask"],
+                "memory_input_ids": memory_batch["input_ids"],
+                "memory_attention_mask": memory_batch["attention_mask"],
+                "labels": labels_batch["input_ids"]
+            }
 
         text_columns = ['question', 'answer', 'biography', 'oracle_prompt', 'memory_prompt']
         trainer_dataset = tokenized_dataset.remove_columns([col for col in text_columns if col in tokenized_dataset.column_names])
