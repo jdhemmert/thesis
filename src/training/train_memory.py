@@ -141,18 +141,19 @@ def main(cfg: DictConfig):
         lora_config = hydra.utils.instantiate(cfg_task.strategy.lora_adapter)
         memory_config = hydra.utils.instantiate(cfg_task.strategy.memory_bank)
         model, tokenizer = load_model_and_tokenizer(
-            model_path=cfg.model.path,
+            model_path=cfg.model.model_path,
             precision=cfg.task.precision,
             lora_config=lora_config,
             memory_config=memory_config
         )
     else:
+        # For sequential strategy, we only train the memory bank adapter
+        memory_config = hydra.utils.instantiate(cfg_task.strategy.memory_bank)
         model, tokenizer = load_model_and_tokenizer(
-            model_path=cfg.model.path,
-            precision=cfg.task.precision
+            model_path=cfg.model.model_path,
+            precision=cfg_task.precision,
+            memory_config=memory_config
         )
-        peft_config = hydra.utils.instantiate(cfg_task.peft, tokenizer_name_or_path=cfg.model.path)
-        model = get_peft_model(model, peft_config)
     
     model.print_trainable_parameters()
 

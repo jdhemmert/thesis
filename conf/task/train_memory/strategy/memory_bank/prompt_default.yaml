@@ -2,4 +2,4 @@ _target_: peft.PromptTuningConfig
 task_type: "CAUSAL_LM"
 prompt_tuning_init: "RANDOM"
 num_virtual_tokens: 20
-tokenizer_name_or_path: ${model.path}
+tokenizer_name_or_path: ${model.model_path}

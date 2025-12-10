@@ -1,4 +1,4 @@
-dataset_file: "data/qa_finetune_dataset_12k.jsonl"
+path: "data/qa_finetune_dataset_12k.jsonl"
 test_split_ratio: 0.125
 streaming: true
 physical_batch_size: 4
