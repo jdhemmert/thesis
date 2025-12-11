@@ -65,13 +65,18 @@ def train_meta(cfg, model, dataset, tokenizer):
     # 2. Parameter Separation
     outer_loop_params = {}
     inner_loop_params = {}
+    print("--- Trainable Parameters ---")
     for name, param in model.named_parameters():
+        if param.requires_grad:
+            print(name)
         if not param.requires_grad:
             continue
         if 'lora_adapter' in name:
             outer_loop_params[name] = param
         elif 'memory_bank' in name:
             inner_loop_params[name] = param
+    print("--- End Trainable Parameters ---")
+    print(f"Found {len(outer_loop_params)} outer loop params and {len(inner_loop_params)} inner loop params.")
 
     # 3. Optimizer for the Outer Loop (LoRA parameters)
     outer_optimizer = Adam(outer_loop_params.values(), lr=cfg.task.strategy.meta_training.outer_learning_rate)

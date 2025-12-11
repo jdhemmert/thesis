@@ -43,7 +43,7 @@ def load_model_and_tokenizer(
     if lora_config:
         peft_configs.append(("lora_adapter", lora_config))
     if memory_config:
-        peft_configs.append(("memory_adapter", memory_config))
+        peft_configs.append(("memory_bank", memory_config))
 
     if peft_configs:
         # Apply the first PEFT config using get_peft_model
@@ -53,5 +53,9 @@ def load_model_and_tokenizer(
         # Add any subsequent PEFT configs using add_adapter
         for adapter_name, config in peft_configs[1:]:
             model.add_adapter(adapter_name, config)
+
+        # Activate both adapters and set them as trainable
+        model.set_adapter(["lora_adapter", "memory_bank"])
+        model.trainable_adapters = ["lora_adapter", "memory_bank"]
 
     return model, tokenizer
