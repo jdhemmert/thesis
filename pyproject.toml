@@ -2,7 +2,7 @@
 name = "thesis"
 version = "0.1.0"
 description = "Master's Thesis Project"
-authors = ["Your Name <you@example.com>"]
+#authors = [{ "Your Name <you@example.com>" }]
 readme = "README.md"
 requires-python = ">=3.9"
 license = { file = "LICENSE" }
@@ -19,6 +19,9 @@ dependencies = [
     "hydra-core",
     "pyyaml",
     "dotenv",
+    "nltk",
+    "absl-py",
+    "rouge-score",
 ]
 
 [build-system]
