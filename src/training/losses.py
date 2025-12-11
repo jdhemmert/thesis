@@ -36,7 +36,7 @@ def self_distillation_loss(
     kl_loss = kl_loss_fct(soft_memory_log_probs, soft_oracle_probs) * (temperature**2)
 
     # Cross-Entropy Loss against the hard labels from the oracle
-    ce_loss = ce_loss_fct(memory_logits, oracle_logits.argmax(dim=-1))
+    ce_loss = ce_loss_fct(memory_logits.transpose(1, 2), oracle_logits.argmax(dim=-1))
 
     if loss_type == "balanced":
         loss = alpha * kl_loss + (1 - alpha) * ce_loss
