@@ -32,14 +32,20 @@ def prepare_meta_dataset(dataset, tokenizer, cfg):
             oracle_prompts = [f"Biography: {ex['biography']}\nQuestion: {ex['question']}" for ex in example_list]
             memory_prompts = [f"Question: {ex['question']}" for ex in example_list]
 
-            oracle_inputs = tokenizer(oracle_prompts, padding=True, truncation=True, return_tensors="pt")
-            memory_inputs = tokenizer(memory_prompts, padding=True, truncation=True, return_tensors="pt")
+            prompts = oracle_prompts + memory_prompts
+            inputs = tokenizer(prompts, padding=True, truncation=True, return_tensors="pt")
+
+            num_oracle_prompts = len(oracle_prompts)
+            oracle_input_ids = inputs.input_ids[:num_oracle_prompts]
+            oracle_attention_mask = inputs.attention_mask[:num_oracle_prompts]
+            memory_input_ids = inputs.input_ids[num_oracle_prompts:]
+            memory_attention_mask = inputs.attention_mask[num_oracle_prompts:]
 
             return {
-                "oracle_input_ids": oracle_inputs.input_ids,
-                "oracle_attention_mask": oracle_inputs.attention_mask,
-                "memory_input_ids": memory_inputs.input_ids,
-                "memory_attention_mask": memory_inputs.attention_mask,
+                "oracle_input_ids": oracle_input_ids,
+                "oracle_attention_mask": oracle_attention_mask,
+                "memory_input_ids": memory_input_ids,
+                "memory_attention_mask": memory_attention_mask,
             }
 
         support_set = preprocess_and_collate(support_examples)
