@@ -29,5 +29,5 @@ strategy:
 
   meta_training:
     inner_learning_rate: 1e-3
-    outer_learning_rate: ${..learning_rate}
+    outer_learning_rate: ${...learning_rate}
     num_inner_steps: 5
