@@ -1,5 +1,6 @@
 import torch
-from torch.func import functional_call, grad
+from torch.func import functional_call
+from torch.autograd import grad
 from torch.optim import Adam
 from tqdm import tqdm
 from collections import defaultdict
@@ -97,10 +98,15 @@ def train_meta(cfg, model, dataset, tokenizer):
                     )
                     return loss
 
-                inner_grads = grad(compute_loss_stateless, adapted_params, create_graph=True)
-                
+                inner_loss = compute_loss_stateless(adapted_params)
+                grad_inputs = tuple(adapted_params.values())
+                # It's possible some memory params are not used, so allow_unused=True
+                inner_grads_tuple = grad(inner_loss, grad_inputs, create_graph=True, allow_unused=True)
+                inner_grads = dict(zip(adapted_params.keys(), inner_grads_tuple))
+
                 for name in adapted_params:
-                    adapted_params[name] = adapted_params[name] - cfg.task.strategy.meta_training.inner_learning_rate * inner_grads[name]
+                    if inner_grads[name] is not None:
+                        adapted_params[name] = adapted_params[name] - cfg.task.strategy.meta_training.inner_learning_rate * inner_grads[name]
 
             # --- Outer Loop (Meta-Optimization) ---
             
