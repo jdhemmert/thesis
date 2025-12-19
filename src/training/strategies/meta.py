@@ -7,10 +7,11 @@ from collections import defaultdict
 import random
 
 from src.training.losses import self_distillation_loss
+from src.utils.dataset import SelfDistillationDataCollator
 
-def prepare_meta_dataset(dataset, tokenizer, cfg):
+def prepare_meta_dataset(dataset, tokenizer):
     """
-    Groups the dataset by biography to create meta-learning tasks.
+    Groups a pre-processed dataset by biography to create meta-learning tasks.
     Each task consists of a support set and a query set of questions about a single biography.
     """
     tasks = defaultdict(list)
@@ -18,38 +19,19 @@ def prepare_meta_dataset(dataset, tokenizer, cfg):
         tasks[example['biography']].append(example)
     
     meta_dataset = []
+    collator = SelfDistillationDataCollator(tokenizer)
+
     for biography, examples in tasks.items():
         if len(examples) < 2:
-            continue # Need at least one for support and one for query
+            continue
         
         random.shuffle(examples)
         split_point = len(examples) // 2
         support_examples = examples[:split_point]
         query_examples = examples[split_point:]
 
-        def preprocess_and_collate(example_list):
-            # Simplified transform_to_prompts and preprocess_function
-            oracle_prompts = [f"Biography: {ex['biography']}\nQuestion: {ex['question']}" for ex in example_list]
-            memory_prompts = [f"Question: {ex['question']}" for ex in example_list]
-
-            prompts = oracle_prompts + memory_prompts
-            inputs = tokenizer(prompts, padding=True, truncation=True, return_tensors="pt")
-
-            num_oracle_prompts = len(oracle_prompts)
-            oracle_input_ids = inputs.input_ids[:num_oracle_prompts]
-            oracle_attention_mask = inputs.attention_mask[:num_oracle_prompts]
-            memory_input_ids = inputs.input_ids[num_oracle_prompts:]
-            memory_attention_mask = inputs.attention_mask[num_oracle_prompts:]
-
-            return {
-                "oracle_input_ids": oracle_input_ids,
-                "oracle_attention_mask": oracle_attention_mask,
-                "memory_input_ids": memory_input_ids,
-                "memory_attention_mask": memory_attention_mask,
-            }
-
-        support_set = preprocess_and_collate(support_examples)
-        query_set = preprocess_and_collate(query_examples)
+        support_set = collator(support_examples)
+        query_set = collator(query_examples)
         
         meta_dataset.append({"support": support_set, "query": query_set})
         
@@ -59,10 +41,8 @@ def train_meta(cfg, model, dataset, tokenizer):
     """
     Implements the meta-learning training strategy using torch.func.
     """
-    # 1. Prepare Meta-Dataset
-    meta_dataset = prepare_meta_dataset(dataset, tokenizer, cfg)
+    meta_dataset = prepare_meta_dataset(dataset, tokenizer)
 
-    # 2. Parameter Separation
     outer_loop_params = {}
     inner_loop_params = {}
     print("--- Trainable Parameters ---")
@@ -78,10 +58,8 @@ def train_meta(cfg, model, dataset, tokenizer):
     print("--- End Trainable Parameters ---")
     print(f"Found {len(outer_loop_params)} outer loop params and {len(inner_loop_params)} inner loop params.")
 
-    # 3. Optimizer for the Outer Loop (LoRA parameters)
     outer_optimizer = Adam(outer_loop_params.values(), lr=cfg.task.strategy.meta_training.outer_learning_rate)
 
-    # 4. Meta-Training Loop
     for epoch in range(cfg.task.num_train_epochs):
         print(f"Meta-Epoch {epoch+1}/{cfg.task.num_train_epochs}")
         
@@ -111,7 +89,6 @@ def train_meta(cfg, model, dataset, tokenizer):
 
                 inner_loss = compute_loss_stateless(adapted_params)
                 grad_inputs = tuple(adapted_params.values())
-                # It's possible some memory params are not used, so allow_unused=True
                 inner_grads_tuple = grad(inner_loss, grad_inputs, create_graph=True, allow_unused=True)
                 inner_grads = dict(zip(adapted_params.keys(), inner_grads_tuple))
 
@@ -146,5 +123,5 @@ def train_meta(cfg, model, dataset, tokenizer):
         print(f"End of Meta-Epoch {epoch+1}. Last meta-loss: {outer_loss.item()}")
 
     print("Meta-training finished.")
-    # TODO: Implement model saving
-    # model.save_pretrained(cfg.task.output_dir)
+
+    model.save_pretrained(cfg.task.output_dir)

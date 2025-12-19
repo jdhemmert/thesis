@@ -1,47 +1,84 @@
-from transformers import Trainer, TrainingArguments
-from peft import get_peft_model
-import hydra.utils
+import torch
+from omegaconf import DictConfig
+from transformers import TrainingArguments, Trainer
 
-def train_sequential(cfg, base_model, tokenizer, train_tokenized_dataset, test_tokenized_dataset, max_steps):
-    if cfg.task.peft_method == "lora":
-        peft_config = hydra.utils.instantiate(cfg.peft.lora)
-        model = get_peft_model(base_model, peft_config)
+from src.training.losses import self_distillation_loss
+from src.training.callbacks import ExtrinsicValidationCallback
+from src.utils.dataset import SelfDistillationDataCollator
 
-    elif cfg.task.peft_method == "prefix":
-        peft_config = hydra.utils.instantiate(cfg.peft.prefix)
-        model = get_peft_model(base_model, peft_config)
-    elif cfg.task.peft_method == "prompt":
-        peft_config = hydra.utils.instantiate(cfg.peft.prompt)
-        model = get_peft_model(base_model, peft_config)
-    else:
-        model = base_model
+class MemoryBankTrainer(Trainer):
+    def __init__(self, loss_type, loss_alpha, temperature, **kwargs):
+        self.loss_type = loss_type
+        self.alpha = loss_alpha
+        self.T = temperature
+        super().__init__(**kwargs)
+
+    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=0):
+        """
+        Custom loss function for self-oracle training of the memory bank.
+        """
+        # Oracle pass: model with full context
+        oracle_outputs = model(
+            input_ids=inputs["oracle_input_ids"],
+            attention_mask=inputs["oracle_attention_mask"],
+            labels=inputs["oracle_input_ids"]
+        )
+
+        # Memory pass: model with only the memory bank
+        memory_outputs = model(
+            input_ids=inputs["memory_input_ids"],
+            attention_mask=inputs["memory_attention_mask"],
+            labels=inputs["memory_input_ids"]
+        )
         
-    # Set up the training arguments
+        loss = self_distillation_loss(
+            oracle_logits=oracle_outputs.logits,
+            memory_logits=memory_outputs.logits,
+            temperature=self.T,
+            alpha=self.alpha,
+            loss_type=self.loss_type
+        )
+
+        return (loss, memory_outputs) if return_outputs else loss
+
+def train_sequential(cfg: DictConfig, model, tokenizer, tokenized_dataset):
+    """
+    Implements the sequential training strategy using the MemoryBankTrainer.
+    """
+    cfg_task = cfg.task
+    print("Using standard fine-tuning strategy.")
+    
     training_args = TrainingArguments(
-        output_dir=cfg.task.output_dir,
-        logging_dir=cfg.task.log_dir,
+        output_dir=cfg_task.output_dir,
+        learning_rate=cfg_task.learning_rate,
+        num_train_epochs=cfg_task.num_train_epochs,
         per_device_train_batch_size=cfg.dataset.physical_batch_size,
         gradient_accumulation_steps=cfg.dataset.accumulation_steps,
-        num_train_epochs=cfg.task.epochs,
-        max_steps=max_steps,
-        logging_steps=100,
-        save_steps=1000,
-        eval_strategy="steps",
-        eval_steps=cfg.task.eval_steps,
-        seed=cfg.task.seed,
+        seed=cfg_task.seed,
+        remove_unused_columns=False, # We handle column removal manually.
         ddp_find_unused_parameters=False,
+        eval_strategy="steps",
+        eval_steps=cfg_task.eval_steps,
+        save_strategy="steps",
     )
 
-    # Create the Trainer
-    trainer = Trainer(
+    # The Trainer complains about unexpected columns, so we remove the text columns for the train/eval datasets.
+    # The full `tokenized_dataset` is still passed to the callback for richer logging.
+    text_columns = [col for col in tokenized_dataset.column_names if tokenized_dataset.features[col].dtype == 'string']
+    trainer_dataset = tokenized_dataset.remove_columns(text_columns)
+
+    trainer = MemoryBankTrainer(
         model=model,
+        loss_type=cfg_task.loss.loss_type,
+        loss_alpha=cfg_task.loss.alpha,
+        temperature=cfg_task.loss.temperature,
         args=training_args,
-        train_dataset=train_tokenized_dataset,
-        eval_dataset=test_tokenized_dataset,
+        train_dataset=trainer_dataset,
+        eval_dataset=trainer_dataset,
+        callbacks=[ExtrinsicValidationCallback(tokenized_dataset, tokenizer, cfg_task)],
+        tokenizer=tokenizer,
+        data_collator=SelfDistillationDataCollator(tokenizer),
     )
 
-    # Train the model
     trainer.train()
-
-    # Save the model
     trainer.save_model()
