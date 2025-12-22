@@ -1,61 +1,99 @@
 import torch
+import importlib
+import hydra
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from peft import PeftModel, get_peft_model, PeftConfig # Added get_peft_model and PeftConfig for type hinting
+from peft import get_peft_model, PeftConfig # PeftConfig is used for type hinting for nested configs
 
-def load_model_and_tokenizer(
-    model_path: str,
-    precision: str = "bf16",
-    lora_config: PeftConfig = None,
-    memory_config: PeftConfig = None
-):
-    """
-    Loads a model and tokenizer with specified precision and optional PEFT adapters.
+from src.configs.models import PeftLlamaConfig, CustomLlamaConfig
 
-    Args:
-        model_path (str): The path to the base model.
-        precision (str, optional): The precision to use for model loading ('fp32', 'fp16', 'bf16'). Defaults to "bf16".
-        lora_config (PeftConfig, optional): The PEFT configuration for the LoRA adapter. Defaults to None.
-        memory_config (PeftConfig, optional): The PEFT configuration for the memory adapter. Defaults to None.
+MODEL_LOADER_REGISTRY = {}
 
-    Returns:
-        tuple: A tuple containing the loaded model and tokenizer.
-    """
-    # Load tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
+def register_model_loader(config_class: type):
+    """Decorator to register a model loader function by its config class type."""
+    def decorator(loader_fn):
+        if config_class in MODEL_LOADER_REGISTRY:
+            raise ValueError(f"Model loader already registered for config type: {config_class.__name__}")
+        MODEL_LOADER_REGISTRY[config_class] = loader_fn
+        return loader_fn
+    return decorator
 
-    # Determine data type for model loading
+def _get_class_from_string(class_path: str):
+    """Dynamically imports and returns a class from its fully qualified string path."""
+    module_name, class_name = class_path.rsplit(".", 1)
+    module = importlib.import_module(module_name)
+    return getattr(module, class_name)
+
+@register_model_loader(PeftLlamaConfig)
+def _load_peft_model(config: PeftLlamaConfig):
+    """Loads a base Llama model and applies PEFT adapters based on config."""
     dtype_map = {
         "fp32": torch.float32,
         "fp16": torch.float16,
         "bf16": torch.bfloat16,
     }
-    dtype = dtype_map.get(precision, torch.bfloat16)
+    dtype = dtype_map.get(config.precision, torch.bfloat16)
 
-    # Determine device
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    # Load base model
-    model = AutoModelForCausalLM.from_pretrained(model_path, dtype=dtype).to(device)
+    model = AutoModelForCausalLM.from_pretrained(config.model_path, torch_dtype=dtype).to(device)
 
-    peft_configs = []
-    if lora_config:
-        peft_configs.append(("lora_adapter", lora_config))
-    if memory_config:
-        peft_configs.append(("memory_bank", memory_config))
+    peft_configs_to_apply = []
+    if config.lora_config:
+        peft_configs_to_apply.append(("lora_adapter", hydra.utils.instantiate(config.lora_config)))
+    if config.memory_config:
+        peft_configs_to_apply.append(("memory_bank", hydra.utils.instantiate(config.memory_config)))
 
-    if peft_configs:
-        # Apply the first PEFT config using get_peft_model
-        adapter_name, config = peft_configs[0]
-        model = get_peft_model(model, config, adapter_name=adapter_name)
+    if peft_configs_to_apply:
+        adapter_name, peft_config = peft_configs_to_apply[0]
+        model = get_peft_model(model, peft_config, adapter_name=adapter_name)
 
-        # Add any subsequent PEFT configs using add_adapter
-        for adapter_name, config in peft_configs[1:]:
-            model.add_adapter(adapter_name, config)
+        for adapter_name, peft_config in peft_configs_to_apply[1:]:
+            model.add_adapter(adapter_name, peft_config)
+            
+        all_adapter_names = [name for name, _ in peft_configs_to_apply]
+        model.set_adapter(all_adapter_names)
+        model.trainable_adapters = all_adapter_names
 
-        # Activate both adapters and set them as trainable
-        model.set_adapter(["lora_adapter", "memory_bank"])
-        model.trainable_adapters = ["lora_adapter", "memory_bank"]
+    return model
 
+@register_model_loader(CustomLlamaConfig)
+def _load_custom_model(config: CustomLlamaConfig):
+    """Loads a custom LlamaForCausalLM subclass based on config."""
+    dtype_map = {
+        "fp32": torch.float32,
+        "fp16": torch.float16,
+        "bf16": torch.bfloat16,
+    }
+    dtype = dtype_map.get(config.precision, torch.bfloat16)
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    
+    custom_model_class = _get_class_from_string(config.custom_class_path)
+    
+    model = custom_model_class.from_pretrained(
+        config.model_path,
+        torch_dtype=dtype,
+        **config.custom_params
+    ).to(device)
+
+    return model
+
+def load_model_from_config(model_config):
+    """
+    Loads a model and its tokenizer based on a provided configuration object.
+    Dispatches to appropriate loader function using a type-based registry.
+    """
+    config_type = type(model_config)
+    if config_type not in MODEL_LOADER_REGISTRY:
+        raise ValueError(f"No model loader registered for config type: {config_type.__name__}. "
+                         f"Available types: {[c.__name__ for c in MODEL_LOADER_REGISTRY.keys()]}")
+    
+    loader_fn = MODEL_LOADER_REGISTRY[config_type]
+    
+    tokenizer = AutoTokenizer.from_pretrained(model_config.model_path)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    model = loader_fn(model_config)
+    
     return model, tokenizer

@@ -89,8 +89,7 @@ def train_meta(cfg, model, dataset, tokenizer):
 
                 inner_loss = compute_loss_stateless(adapted_params)
                 grad_inputs = tuple(adapted_params.values())
-                inner_grads_tuple = grad(inner_loss, grad_inputs, create_graph=True, allow_unused=True)
-                inner_grads = dict(zip(adapted_params.keys(), inner_grads_tuple))
+                inner_grads = dict(zip(adapted_params.keys(), grad(inner_loss, grad_inputs, create_graph=True, allow_unused=True)))
 
                 for name in adapted_params:
                     if inner_grads[name] is not None:
