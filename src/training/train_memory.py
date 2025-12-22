@@ -16,7 +16,6 @@ from src.training.strategies.sequential import train_sequential
 
 @hydra.main(version_base=None, config_path="../../conf", config_name="config")
 def main(cfg: DictConfig):
-    # Access train_memory specific configurations
     cfg_task = cfg.task
     accelerator = Accelerator()
 
@@ -26,9 +25,7 @@ def main(cfg: DictConfig):
     
     model.print_trainable_parameters()
 
-    # Load and preprocess the data using the centralized utility.
-    # We do not drop text columns here because they are needed by the meta-strategy for grouping
-    # and by the ExtrinsicValidationCallback for logging.
+    # Load and preprocess the data
     tokenized_dataset = load_dataset_for_task(
         task_type='self_distillation',
         dataset_path=cfg.dataset.path,
@@ -37,13 +34,11 @@ def main(cfg: DictConfig):
         sample_n=cfg_task.sample_n,
         sample_strategy=cfg_task.sample_strategy,
         seed=cfg_task.seed,
-        drop_text_columns=False
+        drop_text_columns=False # Keep text columns for meta-strategy grouping and validation callback logging
     )
 
-    # STRATEGY DISPATCH
+    # Dispatch to appropriate training strategy
     if cfg_task.strategy.name == "meta":
-        print("Using meta-learning strategy.")
-        # Pass the preprocessed dataset to the meta-training function
         train_meta(cfg, model, tokenized_dataset, tokenizer)
     else:
         train_sequential(cfg, model, tokenizer, tokenized_dataset)

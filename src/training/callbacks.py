@@ -20,8 +20,6 @@ class ExtrinsicValidationCallback(TrainerCallback):
             print("Skipping extrinsic validation: model or tokenizer not available.")
             return
 
-        # Note: The required columns 'answer' and 'question' are text columns.
-        # The eval_dataset passed here must contain them for logging.
         required_cols = ["memory_input_ids", "memory_attention_mask", "answer", "question"]
         if not all(col in eval_dataset.column_names for col in required_cols):
             print(f"Skipping extrinsic validation: Required columns {required_cols} not found in dataset: {eval_dataset.column_names}.")
@@ -34,7 +32,6 @@ class ExtrinsicValidationCallback(TrainerCallback):
 
         model.eval()
         for example in eval_dataset:
-            # Use pre-tokenized inputs from the dataset
             input_ids = torch.tensor([example['memory_input_ids']]).to(model.device)
             attention_mask = torch.tensor([example['memory_attention_mask']]).to(model.device)
 
@@ -56,19 +53,15 @@ class ExtrinsicValidationCallback(TrainerCallback):
             if "question" in example:
                 all_questions_for_log.append(example["question"])
 
-        # Compute ROUGE scores
         rouge = evaluate.load('rouge')
         rouge_scores = rouge.compute(predictions=all_preds, references=all_labels)
 
-        # Add scores to metrics for logging
         if metrics is not None:
             for key, value in rouge_scores.items():
                 metrics[f"eval_{key}"] = value
 
-        # Explicitly print ROUGE scores to console if control.log_metrics is not available
-            print(f"Extrinsic ROUGE Scores: {rouge_scores}")
+        print(f"Extrinsic ROUGE Scores: {rouge_scores}")
 
-        # Log predictions to file
         if state.is_world_process_zero and self.cfg_task.log_predictions:
             log_file_path = os.path.join(self.cfg_task.output_dir, f"prediction_log.epoch_{int(state.epoch)}.jsonl")
             print(f"Logging predictions to {log_file_path}")

@@ -17,14 +17,12 @@ class MemoryBankTrainer(Trainer):
         """
         Custom loss function for self-oracle training of the memory bank.
         """
-        # Oracle pass: model with full context
         oracle_outputs = model(
             input_ids=inputs["oracle_input_ids"],
             attention_mask=inputs["oracle_attention_mask"],
             labels=inputs["oracle_input_ids"]
         )
 
-        # Memory pass: model with only the memory bank
         memory_outputs = model(
             input_ids=inputs["memory_input_ids"],
             attention_mask=inputs["memory_attention_mask"],
@@ -55,15 +53,13 @@ def train_sequential(cfg: DictConfig, model, tokenizer, tokenized_dataset):
         per_device_train_batch_size=cfg.dataset.physical_batch_size,
         gradient_accumulation_steps=cfg.dataset.accumulation_steps,
         seed=cfg_task.seed,
-        remove_unused_columns=False, # We handle column removal manually.
+        remove_unused_columns=False,
         ddp_find_unused_parameters=False,
         eval_strategy="steps",
         eval_steps=cfg_task.eval_steps,
         save_strategy="steps",
     )
 
-    # The Trainer complains about unexpected columns, so we remove the text columns for the train/eval datasets.
-    # The full `tokenized_dataset` is still passed to the callback for richer logging.
     text_columns = [col for col in tokenized_dataset.column_names if tokenized_dataset.features[col].dtype == 'string']
     trainer_dataset = tokenized_dataset.remove_columns(text_columns)
 
