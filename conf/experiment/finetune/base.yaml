@@ -1,0 +1,5 @@
+# Overrides the baseline finetune experiment to exclude a memory bank.
+# To run this: python run.py experiment=finetune/base
+
+model:
+  memory_config: null # Exclude the memory_config for this finetuning run

@@ -1,7 +1,21 @@
+# Main entry point configuration.
+# Defines a complete baseline experiment and allows for optional experiment overrides.
+
 defaults:
-  - model: llama3_base
-  - peft: default
-  - dataset: qa_finetune_12k
-  # - task: finetune
-  - override hydra/launcher: local_accelerate
   - _self_
+
+  # --- Baseline Experiment Components ---
+  - model: peft_llama
+  - task: finetune
+  - dataset: qa_finetune_12k
+  
+  # --- Optional Experiment Override ---
+  # Allows running `python run.py experiment=...` to load an experiment file
+  # that overrides the baseline components defined above.
+  - optional experiment: ???
+  
+  - override hydra/launcher: local_accelerate
+
+# You can still override from the command line, e.g.,
+# python run.py task.learning_rate=1e-5
+
