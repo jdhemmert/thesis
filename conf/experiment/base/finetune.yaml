@@ -1,0 +1,9 @@
+# @package _global_
+
+# Overrides for the 'finetune' portion of the 'base' experiment.
+# This file will be loaded when running:
+# python -m src.training.finetune experiment=base
+
+# Example: Override a specific task parameter for finetune
+task:
+  learning_rate: 1.23e-4 # Specific learning rate for this base experiment's finetune run

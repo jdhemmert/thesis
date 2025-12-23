@@ -9,7 +9,7 @@ from src.utils.model import load_model_from_config
 
 load_dotenv()
 
-@hydra.main(version_base=None, config_path="../../conf", config_name="config")
+@hydra.main(version_base=None, config_path="../../conf", config_name="config_finetune")
 def main(cfg: DictConfig):
     if cfg.task.gpu_ids:
         os.environ["CUDA_VISIBLE_DEVICES"] = cfg.task.gpu_ids
@@ -61,5 +61,3 @@ def main(cfg: DictConfig):
 
 if __name__ == "__main__":
     main()
-
-

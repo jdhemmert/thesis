@@ -1,0 +1,7 @@
+# @package _global_
+
+model: peft_llama
+dataset: qa_finetune_240k
+
+task:
+  sample_n: 555
