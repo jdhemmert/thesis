@@ -3,10 +3,10 @@ name: "finetune"
 output_dir: "models/finetuned_model"
 log_dir: "logs"
 seed: 42
-gpu_ids: ""
+gpu_ids: null
 epochs: 3
 precision: "bf16"
-max_seq_length: 128
-eval_steps: 1000
+max_seq_length: 512
+eval_steps: 100
 learning_rate: 2e-4
-peft_method: "lora"
+sample_n: null
