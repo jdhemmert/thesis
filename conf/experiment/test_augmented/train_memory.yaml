@@ -1,0 +1,54 @@
+# @package _global_
+
+# This experiment tests the soft-prompt initialization and training
+# for the AugmentedLlamaForCausalLM model.
+
+# This file has been flattened to avoid issues with nested defaults in Hydra.
+
+# --- Task Configuration ---
+# Based on conf/task/train_memory.yaml
+task:
+  name: "train_memory"
+  output_dir: "models/memory_model_custom"
+  learning_rate: 2e-4
+  num_train_epochs: 1           # Override for a quick run
+  precision: "bf16"
+  seed: 42
+  max_length: 128               # Override for a quick run
+  eval_steps: 10                # Override for a quick run
+  sample_n: 100                 # Override for a quick run
+  sample_strategy: 'random'
+  log_predictions: true
+
+  optimizer_params:
+    # This is the key to freezing the base model and training only the soft prompt
+    trainable_strategy: "soft_prompt_only" # Override
+
+  loss:
+    loss_type: "balanced"
+    alpha: 0.2
+    temperature: 0.5
+
+  strategy:
+    name: "sequential"
+
+# --- Model Configuration ---
+# Based on conf/model/augmented_llama.yaml
+model:
+  _target_: src.configs.models.AugmentedLlamaConfig
+  model_path: "meta-llama/Llama-3.2-3B"
+  custom_class_path: src.models.augmented_llama.AugmentedLlamaForCausalLM
+  custom_params:
+    virtual_token_count: 10
+  # Overrides to trigger initialization
+  initialization_context_text: "This is a test sentence to initialize the virtual prompt."
+  initialization_noise_level: 0.01
+
+# --- Dataset Configuration ---
+# Based on conf/dataset/qa_finetune_6k.yaml
+dataset:
+  path: "data/qa_finetune_dataset_6k.jsonl"
+  test_split_ratio: 0.125
+  streaming: true
+  physical_batch_size: 4
+  accumulation_steps: 1

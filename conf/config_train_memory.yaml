@@ -1,6 +1,5 @@
 defaults:
   - experiment_name: base
-  - model: llama3_custom
   - task: train_memory
   - dataset: qa_finetune_12k
   - optional experiment: ${experiment_name}/train_memory

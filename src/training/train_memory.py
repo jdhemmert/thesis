@@ -32,7 +32,7 @@ def main(cfg: DictConfig):
     if cfg_task.strategy.name == "meta":
         train_meta(cfg, model, tokenized_dataset, tokenizer)
     else:
-        train_sequential(cfg, model, tokenized_dataset, tokenizer)
+        train_sequential(cfg, model, tokenizer, tokenized_dataset)
 
 if __name__ == "__main__":
     main()

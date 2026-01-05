@@ -1,0 +1,28 @@
+# @package model
+
+# This configuration uses the AugmentedLlamaConfig to load our custom model
+# with support for soft-prompt initialization.
+
+defaults:
+  - _self_
+  # We can inherit defaults from another model config if needed, but for now,
+  # we will define it directly.
+
+# Instantiate the AugmentedLlamaConfig class from our Python configs
+_target_: src.configs.models.AugmentedLlamaConfig
+
+# --- Overrides for AugmentedLlamaConfig ---
+
+# Path to the custom model class we want to load
+custom_class_path: src.models.augmented_llama.AugmentedLlamaForCausalLM
+
+# Default parameters passed to the model's __init__ method
+# This is where we set the initial number of virtual tokens.
+# This value may be immediately changed by the initialize_soft_prompt utility
+# if initialization_context_text is set.
+custom_params:
+  virtual_token_count: 10
+
+# Note: The fields for initialization (initialization_context_text, etc.)
+# are already defined with defaults in the AugmentedLlamaConfig class.
+# They are overridden in the experiment file.

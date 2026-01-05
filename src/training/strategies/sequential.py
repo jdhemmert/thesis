@@ -1,6 +1,7 @@
 import torch
 from omegaconf import DictConfig
 from transformers import TrainingArguments, Trainer
+import datasets
 
 from src.training.losses import self_distillation_loss
 from src.training.callbacks import ExtrinsicValidationCallback
@@ -45,6 +46,13 @@ def train_sequential(cfg: DictConfig, model, tokenizer, tokenized_dataset):
     """
     cfg_task = cfg.task
     print("Using standard fine-tuning strategy.")
+
+    # Freeze parameters based on the training strategy
+    if "optimizer_params" in cfg_task and cfg_task.optimizer_params.get("trainable_strategy") == "soft_prompt_only":
+        print("Freezing base model parameters and training only the soft prompt.")
+        for name, param in model.named_parameters():
+            if "virtual_prompt" not in name:
+                param.requires_grad = False
     
     training_args = TrainingArguments(
         output_dir=cfg_task.output_dir,
@@ -60,7 +68,10 @@ def train_sequential(cfg: DictConfig, model, tokenizer, tokenized_dataset):
         save_strategy="steps",
     )
 
-    text_columns = [col for col in tokenized_dataset.column_names if tokenized_dataset.features[col].dtype == 'string']
+    text_columns = [
+        col for col in tokenized_dataset.column_names
+        if isinstance(tokenized_dataset.features[col], datasets.Value) and tokenized_dataset.features[col].dtype == 'string'
+    ]
     trainer_dataset = tokenized_dataset.remove_columns(text_columns)
 
     trainer = MemoryBankTrainer(

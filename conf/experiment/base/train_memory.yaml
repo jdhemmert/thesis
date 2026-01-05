@@ -4,6 +4,9 @@
 # This file will be loaded when running:
 # python -m src.training.train_memory experiment=base
 
+defaults:
+  - override /model: llama3_custom
+
 # Example: Override specific task parameters for train_memory
 task:
   sample_n: 777 # Use a specific sample size for this base experiment's memory run

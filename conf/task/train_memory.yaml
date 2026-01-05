@@ -11,6 +11,11 @@ sample_n: 1000
 sample_strategy: 'random'
 log_predictions: true
 
+optimizer_params:
+  # Defines which parts of the model will be trained.
+  # Options: "all", "soft_prompt_only"
+  trainable_strategy: "all"
+
 loss:
   loss_type: "balanced"
   alpha: 0.2
