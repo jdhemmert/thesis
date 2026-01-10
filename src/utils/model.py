@@ -1,4 +1,5 @@
 import torch
+from torch import nn
 import importlib
 import hydra
 from typing import Optional, Any, Dict
@@ -33,11 +34,14 @@ def _load_peft_model(config: PeftLlamaConfig, tokenizer: AutoTokenizer):
     dtype = dtype_map.get(config.precision, torch.bfloat16)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    model = AutoModelForCausalLM.from_pretrained(config.model_path, torch_dtype=dtype).to(device)
+    model = AutoModelForCausalLM.from_pretrained(config.model_path, dtype=dtype).to(device)
+
+    print(config.lora_config)
+    print(config.memory_config)
 
     peft_configs_to_apply = []
     if config.lora_config:
-        peft_configs_to_apply.append(("lora_adapter", hydra.utils.instantiate(config.lora_config)))
+        peft_configs_to_apply.append(("lora_adapter", config.lora_config))
     if config.memory_config:
         peft_configs_to_apply.append(("memory_bank", hydra.utils.instantiate(config.memory_config)))
 
@@ -49,7 +53,8 @@ def _load_peft_model(config: PeftLlamaConfig, tokenizer: AutoTokenizer):
             model.add_adapter(adapter_name, peft_config)
             
         all_adapter_names = [name for name, _ in peft_configs_to_apply]
-        model.set_adapter(all_adapter_names)
+        print(all_adapter_names)
+        model.set_adapter(all_adapter_names[0])
         model.trainable_adapters = all_adapter_names
 
     return model
@@ -65,7 +70,7 @@ def _load_custom_model(config: CustomLlamaConfig, tokenizer: AutoTokenizer):
     
     model = custom_model_class.from_pretrained(
         config.model_path,
-        torch_dtype=dtype,
+        dtype=dtype,
         **config.custom_params
     ).to(device)
 

@@ -74,6 +74,10 @@ def train_sequential(cfg: DictConfig, model, tokenizer, tokenized_dataset):
     ]
     trainer_dataset = tokenized_dataset.remove_columns(text_columns)
 
+    callbacks = []
+    if cfg_task.get("extrinsic_validation") != "never":
+        callbacks.append(ExtrinsicValidationCallback(tokenized_dataset, tokenizer, cfg_task))
+
     trainer = MemoryBankTrainer(
         model=model,
         loss_type=cfg_task.loss.loss_type,
@@ -82,7 +86,7 @@ def train_sequential(cfg: DictConfig, model, tokenizer, tokenized_dataset):
         args=training_args,
         train_dataset=trainer_dataset,
         eval_dataset=trainer_dataset,
-        callbacks=[ExtrinsicValidationCallback(tokenized_dataset, tokenizer, cfg_task)],
+        callbacks=callbacks,
         tokenizer=tokenizer,
         data_collator=SelfDistillationDataCollator(tokenizer),
     )

@@ -25,3 +25,5 @@ strategy:
   # Using sequential strategy for direct training of the custom model.
   # The 'meta' strategy is for training separate PEFT adapters.
   name: "sequential"
+
+extrinsic_validation: "never" # Options: "never", "end", "always"

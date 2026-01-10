@@ -11,12 +11,12 @@ task:
   name: "train_memory"
   output_dir: "models/memory_model_custom"
   learning_rate: 2e-4
-  num_train_epochs: 1           # Override for a quick run
+  num_train_epochs: 10
   precision: "bf16"
   seed: 42
-  max_length: 128               # Override for a quick run
-  eval_steps: 10                # Override for a quick run
-  sample_n: 100                 # Override for a quick run
+  max_length: 128
+  eval_steps: 256
+  # sample_n: 100
   sample_strategy: 'random'
   log_predictions: true
 
@@ -32,6 +32,8 @@ task:
   strategy:
     name: "sequential"
 
+  extrinsic_validation: "end"
+
 # --- Model Configuration ---
 # Based on conf/model/augmented_llama.yaml
 model:
@@ -41,7 +43,7 @@ model:
   custom_params:
     virtual_token_count: 10
   # Overrides to trigger initialization
-  initialization_context_text: "This is a test sentence to initialize the virtual prompt."
+  # initialization_context_text: "This is a test sentence to initialize the virtual prompt."
   initialization_noise_level: 0.01
 
 # --- Dataset Configuration ---

@@ -16,7 +16,7 @@ def main(cfg: DictConfig):
     model_config = hydra.utils.instantiate(cfg.model)
     model, tokenizer = load_model_from_config(model_config)
     
-    model.print_trainable_parameters()
+    # model.model.print_trainable_parameters()
 
     tokenized_dataset = load_dataset_for_task(
         task_type='self_distillation',

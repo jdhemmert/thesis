@@ -10,11 +10,21 @@ class ExtrinsicValidationCallback(TrainerCallback):
         self.eval_dataset = eval_dataset
         self.tokenizer = tokenizer
         self.cfg_task = cfg_task
+        self.validation_policy = cfg_task.get("extrinsic_validation", "always")
 
-    def on_evaluate(self, args, state, control, metrics=None, **kwargs):
+    def on_evaluate(self, args, state, control, **kwargs):
+        if self.validation_policy == "always":
+            self._run_validation(state, **kwargs)
+
+    def on_train_end(self, args, state, control, **kwargs):
+        if self.validation_policy == "end" or self.validation_policy == "always":
+            self._run_validation(state, **kwargs)
+
+    def _run_validation(self, state, **kwargs):
         model = kwargs.get("model")
         tokenizer = self.tokenizer
         eval_dataset = self.eval_dataset
+        metrics = kwargs.get("metrics", {})
 
         if model is None or tokenizer is None:
             print("Skipping extrinsic validation: model or tokenizer not available.")
@@ -56,9 +66,8 @@ class ExtrinsicValidationCallback(TrainerCallback):
         rouge = evaluate.load('rouge')
         rouge_scores = rouge.compute(predictions=all_preds, references=all_labels)
 
-        if metrics is not None:
-            for key, value in rouge_scores.items():
-                metrics[f"eval_{key}"] = value
+        for key, value in rouge_scores.items():
+            metrics[f"eval_{key}"] = value
 
         print(f"Extrinsic ROUGE Scores: {rouge_scores}")
 

@@ -1,186 +1,127 @@
-Loading checkpoint shards:   0%|                                                                                                             | 0/2 [00:00<?, ?it/s]Loading checkpoint shards: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████| 2/2 [00:00<00:00, 84.24it/s]
-Some weights of AugmentedLlamaForCausalLM were not initialized from the model checkpoint at meta-llama/Llama-3.2-3B and are newly initialized: ['model.virtual_prompt.weight']
-You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
-/home/jhemmer/projects/thesis/src/training/strategies/sequential.py:15: FutureWarning: `tokenizer` is deprecated and will be removed in version 5.0.0 for `MemoryBankTrainer.__init__`. Use `processing_class` instead.
-  super().__init__(**kwargs)
-The tokenizer has new PAD/BOS/EOS tokens that differ from the model config and generation config. The model config and generation config were aligned accordingly, being updated with the tokenizer's values. Updated tokens: {'pad_token_id': 128001}.
-Performing soft prompt initialization...
-Applied Gaussian noise with std_dev=0.01 to initial soft prompt.
-Initialized soft prompt with 12 tokens from context.
-Using standard fine-tuning strategy.
-Freezing base model parameters and training only the soft prompt.
-  0%|                                                                                                                                       | 0/25 [00:00<?, ?it/s]You're using a PreTrainedTokenizerFast tokenizer. Please note that with a fast tokenizer, using the `__call__` method is faster than using a method to encode the text followed by a call to the `pad` method to get a padded encoding.
-Could not estimate the number of tokens of the input, floating-point operations will not be computed
-  4%|█████                                                                                                                          | 1/25 [00:00<00:17,  1.38it/s]  8%|██████████▏                                                                                                                    | 2/25 [00:01<00:11,  1.98it/s] 12%|███████████████▏                                                                                                               | 3/25 [00:01<00:09,  2.30it/s] 16%|████████████████████▎                                                                                                          | 4/25 [00:01<00:08,  2.51it/s] 20%|█████████████████████████▍                                                                                                     | 5/25 [00:02<00:07,  2.63it/s] 24%|██████████████████████████████▍                                                                                                | 6/25 [00:02<00:07,  2.71it/s] 28%|███████████████████████████████████▌                                                                                           | 7/25 [00:02<00:06,  2.76it/s] 32%|████████████████████████████████████████▋                                                                                      | 8/25 [00:03<00:06,  2.80it/s] 36%|█████████████████████████████████████████████▋                                                                                 | 9/25 [00:03<00:05,  2.82it/s] 40%|██████████████████████████████████████████████████▍                                                                           | 10/25 [00:03<00:05,  2.84it/s]
-  0%|                                                                                                                                       | 0/13 [00:00<?, ?it/s][A
- 15%|███████████████████▌                                                                                                           | 2/13 [00:00<00:01,  7.35it/s][A
- 23%|█████████████████████████████▎                                                                                                 | 3/13 [00:00<00:01,  5.23it/s][A
- 31%|███████████████████████████████████████                                                                                        | 4/13 [00:00<00:01,  4.54it/s][A
- 38%|████████████████████████████████████████████████▊                                                                              | 5/13 [00:01<00:01,  4.22it/s][A
- 46%|██████████████████████████████████████████████████████████▌                                                                    | 6/13 [00:01<00:01,  4.05it/s][A
- 54%|████████████████████████████████████████████████████████████████████▍                                                          | 7/13 [00:01<00:01,  3.95it/s][A
- 62%|██████████████████████████████████████████████████████████████████████████████▏                                                | 8/13 [00:01<00:01,  3.88it/s][A
- 69%|███████████████████████████████████████████████████████████████████████████████████████▉                                       | 9/13 [00:02<00:01,  3.83it/s][A
- 77%|████████████████████████████████████████████████████████████████████████████████████████████████▉                             | 10/13 [00:02<00:00,  3.80it/s][A
- 85%|██████████████████████████████████████████████████████████████████████████████████████████████████████████▌                   | 11/13 [00:02<00:00,  3.77it/s][A
- 92%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▎         | 12/13 [00:02<00:00,  3.76it/s][A
-100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:03<00:00,  3.81it/s][A                                                                                                                                                                   
-                                                                                                                                                                   [A 40%|██████████████████████████████████████████████████▍                                                                           | 10/25 [00:07<00:05,  2.84it/s]
-100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 13/13 [00:03<00:00,  3.81it/s][A{'eval_loss': 87.72667694091797, 'eval_runtime': 3.4564, 'eval_samples_per_second': 28.932, 'eval_steps_per_second': 3.761, 'epoch': 0.4}
-
-Performing Extrinsic Validation...
-Error executing job with overrides: ['experiment_name=test_augmented']
 Traceback (most recent call last):
-  File "/home/jhemmer/projects/thesis/src/training/train_memory.py", line 35, in main
-    train_sequential(cfg, model, tokenizer, tokenized_dataset)
-    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/jhemmer/projects/thesis/src/training/strategies/sequential.py", line 90, in train_sequential
-    trainer.train()
-    ~~~~~~~~~~~~~^^
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/transformers/trainer.py", line 2325, in train
-    return inner_training_loop(
-        args=args,
-    ...<2 lines>...
-        ignore_keys_for_eval=ignore_keys_for_eval,
-    )
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/transformers/trainer.py", line 2756, in _inner_training_loop
-    self._maybe_log_save_evaluate(
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
-        tr_loss,
-        ^^^^^^^^
-    ...<6 lines>...
-        learning_rate=learning_rate,
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/transformers/trainer.py", line 3221, in _maybe_log_save_evaluate
-    metrics = self._evaluate(trial, ignore_keys_for_eval)
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/transformers/trainer.py", line 3170, in _evaluate
-    metrics = self.evaluate(ignore_keys=ignore_keys_for_eval)
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/transformers/trainer.py", line 4519, in evaluate
-    self.control = self.callback_handler.on_evaluate(self.args, self.state, self.control, output.metrics)
-                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/transformers/trainer_callback.py", line 538, in on_evaluate
-    return self.call_event("on_evaluate", args, state, control, metrics=metrics)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/transformers/trainer_callback.py", line 556, in call_event
-    result = getattr(callback, event)(
-        args,
-    ...<8 lines>...
-        **kwargs,
-    )
-  File "/home/jhemmer/projects/thesis/src/training/callbacks.py", line 39, in on_evaluate
-    generated_ids = model.generate(
-        input_ids=input_ids,
-    ...<3 lines>...
-        eos_token_id=tokenizer.eos_token_id
-    )
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/torch/utils/_contextlib.py", line 120, in decorate_context
-    return func(*args, **kwargs)
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/transformers/generation/utils.py", line 2564, in generate
-    result = decoding_method(
-        self,
-    ...<5 lines>...
-        **model_kwargs,
-    )
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/transformers/generation/utils.py", line 2784, in _sample
-    outputs = self(**model_inputs, return_dict=True)
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1775, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1786, in _call_impl
-    return forward_call(*args, **kwargs)
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/accelerate/utils/operations.py", line 819, in forward
-    return model_forward(*args, **kwargs)
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/accelerate/utils/operations.py", line 807, in __call__
-    return convert_to_fp32(self.model_forward(*args, **kwargs))
-                           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/torch/amp/autocast_mode.py", line 44, in decorate_autocast
-    return func(*args, **kwargs)
-  File "/home/jhemmer/projects/thesis/src/models/augmented_llama.py", line 140, in forward
-    return super().forward(
-           ~~~~~~~~~~~~~~~^
-        input_ids=input_ids,
-        ^^^^^^^^^^^^^^^^^^^^
-    ...<9 lines>...
-        cache_position=cache_position,
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/transformers/utils/generic.py", line 918, in wrapper
-    output = func(self, *args, **kwargs)
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/transformers/models/llama/modeling_llama.py", line 459, in forward
-    outputs: BaseModelOutputWithPast = self.model(
-                                       ~~~~~~~~~~^
-        input_ids=input_ids,
-        ^^^^^^^^^^^^^^^^^^^^
-    ...<6 lines>...
-        **kwargs,
-        ^^^^^^^^^
-    )
-    ^
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1775, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1786, in _call_impl
-    return forward_call(*args, **kwargs)
-  File "/home/jhemmer/projects/thesis/src/models/augmented_llama.py", line 96, in forward
-    return super().forward(
-           ~~~~~~~~~~~~~~~^
-        input_ids=None, # We are now using inputs_embeds
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    ...<7 lines>...
-        return_dict=return_dict,
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/utils.py", line 220, in run_and_report
+    return func()
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/utils.py", line 458, in <lambda>
+    lambda: hydra.run(
+            ~~~~~~~~~^
+        config_name=config_name,
         ^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/transformers/utils/generic.py", line 1072, in wrapper
-    outputs = func(self, *args, **kwargs)
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/transformers/models/llama/modeling_llama.py", line 395, in forward
-    hidden_states = decoder_layer(
-        hidden_states,
-    ...<5 lines>...
-        **kwargs,
-    )
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/transformers/modeling_layers.py", line 94, in __call__
-    return super().__call__(*args, **kwargs)
-           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1775, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1786, in _call_impl
-    return forward_call(*args, **kwargs)
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/transformers/utils/deprecation.py", line 172, in wrapped_func
-    return func(*args, **kwargs)
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/transformers/models/llama/modeling_llama.py", line 294, in forward
-    hidden_states, _ = self.self_attn(
-                       ~~~~~~~~~~~~~~^
-        hidden_states=hidden_states,
+        task_function=task_function,
         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    ...<6 lines>...
-        **kwargs,
-        ^^^^^^^^^
+        overrides=overrides,
+        ^^^^^^^^^^^^^^^^^^^^
     )
     ^
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1775, in _wrapped_call_impl
-    return self._call_impl(*args, **kwargs)
-           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1786, in _call_impl
-    return forward_call(*args, **kwargs)
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/transformers/utils/deprecation.py", line 172, in wrapped_func
-    return func(*args, **kwargs)
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/transformers/models/llama/modeling_llama.py", line 241, in forward
-    query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
-                               ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/transformers/models/llama/modeling_llama.py", line 138, in apply_rotary_pos_emb
-    q_embed = (q * cos) + (rotate_half(q) * sin)
-               ~~^~~~~
-RuntimeError: The size of tensor a (26) must match the size of tensor b (14) at non-singleton dimension 2
-
-Set the environment variable HYDRA_FULL_ERROR=1 for a complete stack trace.
- 40%|██████████████████████████████████████████████████▍                                                                           | 10/25 [00:08<00:12,  1.23it/s]
-
-                                                                                                                                                                   [ATraceback (most recent call last):
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/hydra.py", line 105, in run
+    cfg = self.compose_config(
+        config_name=config_name,
+    ...<2 lines>...
+        run_mode=RunMode.RUN,
+    )
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/hydra.py", line 594, in compose_config
+    cfg = self.config_loader.load_configuration(
+        config_name=config_name,
+    ...<3 lines>...
+        validate_sweep_overrides=validate_sweep_overrides,
+    )
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/config_loader_impl.py", line 142, in load_configuration
+    return self._load_configuration_impl(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        config_name=config_name,
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+        validate_sweep_overrides=validate_sweep_overrides,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/config_loader_impl.py", line 253, in _load_configuration_impl
+    defaults_list = create_defaults_list(
+        repo=caching_repo,
+    ...<3 lines>...
+        skip_missing=run_mode == RunMode.MULTIRUN,
+    )
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/defaults_list.py", line 745, in create_defaults_list
+    defaults, tree = _create_defaults_list(
+                     ~~~~~~~~~~~~~~~~~~~~~^
+        repo,
+        ^^^^^
+    ...<3 lines>...
+        skip_missing=skip_missing,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/defaults_list.py", line 715, in _create_defaults_list
+    defaults_tree = _create_defaults_tree(
+        repo=repo,
+    ...<4 lines>...
+        skip_missing=skip_missing,
+    )
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/defaults_list.py", line 356, in _create_defaults_tree
+    ret = _create_defaults_tree_impl(
+        repo=repo,
+    ...<4 lines>...
+        overrides=overrides,
+    )
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/defaults_list.py", line 457, in _create_defaults_tree_impl
+    return _expand_virtual_root(repo, root, overrides, skip_missing)
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/defaults_list.py", line 280, in _expand_virtual_root
+    subtree = _create_defaults_tree_impl(
+        repo=repo,
+    ...<4 lines>...
+        overrides=overrides,
+    )
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/defaults_list.py", line 583, in _create_defaults_tree_impl
+    subtree = _create_defaults_tree_impl(
+        repo=repo,
+    ...<4 lines>...
+        overrides=overrides,
+    )
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/defaults_list.py", line 466, in _create_defaults_tree_impl
+    update_package_header(repo=repo, node=parent)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/defaults_list.py", line 262, in update_package_header
+    loaded = repo.load_config(config_path=node.get_config_path())
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/config_repository.py", line 348, in load_config
+    ret = self.delegate.load_config(config_path=config_path)
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/config_repository.py", line 91, in load_config
+    ret = source.load_config(config_path=config_path)
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/core_plugins/file_config_source.py", line 31, in load_config
+    cfg = OmegaConf.load(f)
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/omegaconf/omegaconf.py", line 192, in load
+    obj = yaml.load(file_, Loader=get_yaml_loader())
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/yaml/__init__.py", line 81, in load
+    return loader.get_single_data()
+           ~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/yaml/constructor.py", line 49, in get_single_data
+    node = self.get_single_node()
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/yaml/composer.py", line 36, in get_single_node
+    document = self.compose_document()
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/yaml/composer.py", line 55, in compose_document
+    node = self.compose_node(None, None)
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/yaml/composer.py", line 84, in compose_node
+    node = self.compose_mapping_node(anchor)
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/yaml/composer.py", line 133, in compose_mapping_node
+    item_value = self.compose_node(node, item_key)
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/yaml/composer.py", line 84, in compose_node
+    node = self.compose_mapping_node(anchor)
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/yaml/composer.py", line 133, in compose_mapping_node
+    item_value = self.compose_node(node, item_key)
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/yaml/composer.py", line 84, in compose_node
+    node = self.compose_mapping_node(anchor)
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/yaml/composer.py", line 127, in compose_mapping_node
+    while not self.check_event(MappingEndEvent):
+              ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/yaml/parser.py", line 98, in check_event
+    self.current_event = self.state()
+                         ~~~~~~~~~~^^
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/yaml/parser.py", line 438, in parse_block_mapping_key
+    raise ParserError("while parsing a block mapping", self.marks[-1],
+            "expected <block end>, but found %r" % token.id, token.start_mark)
+yaml.parser.ParserError: while parsing a block mapping
+  in "/home/jhemmer/projects/thesis/conf/experiment/test_augmented/train_memory.yaml", line 28, column 5
+expected <block end>, but found '<scalar>'
+  in "/home/jhemmer/projects/thesis/conf/experiment/test_augmented/train_memory.yaml", line 28, column 27
+Traceback (most recent call last):
   File "/home/jhemmer/projects/thesis/venv_uv/bin/accelerate", line 10, in <module>
     sys.exit(main())
              ~~~~^^

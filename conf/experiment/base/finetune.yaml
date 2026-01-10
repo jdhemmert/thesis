@@ -7,3 +7,6 @@
 # Example: Override a specific task parameter for finetune
 task:
   learning_rate: 1.23e-4 # Specific learning rate for this base experiment's finetune run
+
+model:
+    memory_config: no
