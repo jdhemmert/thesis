@@ -1,19 +1,18 @@
 import torch
 from torch import nn
-import importlib
 import hydra
 from typing import Optional, Any, Dict
 
-from torch import nn
-from transformers import AutoTokenizer, AutoModelForCausalLM, PreTrainedModel, PreTrainedTokenizer
+from transformers import AutoTokenizer, AutoModelForCausalLM, PreTrainedModel, PreTrainedTokenizer, LlamaConfig, PretrainedConfig
 from peft import get_peft_model, PeftConfig
 
-from src.configs.models import PeftLlamaConfig, CustomLlamaConfig, AugmentedLlamaConfig
+# Import the co-located model config
+from src.models.augmented_llama import AugmentedLlamaForCausalLM, AugmentedLlamaConfig
 
 MODEL_LOADER_REGISTRY = {}
 
 def register_model_loader(config_class: type):
-    """Decorator to register a model loader function by its config class type."""
+    """Decorator to register a model loader function for a specific base model config type."""
     def decorator(loader_fn):
         if config_class in MODEL_LOADER_REGISTRY:
             raise ValueError(f"Model loader already registered for config type: {config_class.__name__}")
@@ -21,105 +20,81 @@ def register_model_loader(config_class: type):
         return loader_fn
     return decorator
 
-def _get_class_from_string(class_path: str):
-    """Dynamically imports and returns a class from its fully qualified string path."""
-    module_name, class_name = class_path.rsplit(".", 1)
-    module = importlib.import_module(module_name)
-    return getattr(module, class_name)
-
-@register_model_loader(PeftLlamaConfig)
-def _load_peft_model(config: PeftLlamaConfig, tokenizer: AutoTokenizer):
-    """Loads a base Llama model and applies PEFT adapters based on config."""
+@register_model_loader(LlamaConfig)
+def _load_base_llama(config: LlamaConfig, precision: str, **kwargs):
+    """Loads a standard base Llama model."""
     dtype_map = {"fp32": torch.float32, "fp16": torch.float16, "bf16": torch.bfloat16}
-    dtype = dtype_map.get(config.precision, torch.bfloat16)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    model = AutoModelForCausalLM.from_pretrained(config.model_path, dtype=dtype).to(device)
-
-    print(config.lora_config)
-    print(config.memory_config)
-
-    peft_configs_to_apply = []
-    if config.lora_config:
-        peft_configs_to_apply.append(("lora_adapter", config.lora_config))
-    if config.memory_config:
-        peft_configs_to_apply.append(("memory_bank", hydra.utils.instantiate(config.memory_config)))
-
-    if peft_configs_to_apply:
-        adapter_name, peft_config = peft_configs_to_apply[0]
-        model = get_peft_model(model, peft_config, adapter_name=adapter_name)
-
-        for adapter_name, peft_config in peft_configs_to_apply[1:]:
-            model.add_adapter(adapter_name, peft_config)
-            
-        all_adapter_names = [name for name, _ in peft_configs_to_apply]
-        print(all_adapter_names)
-        model.set_adapter(all_adapter_names[0])
-        model.trainable_adapters = all_adapter_names
-
-    return model
-
-@register_model_loader(CustomLlamaConfig)
-def _load_custom_model(config: CustomLlamaConfig, tokenizer: AutoTokenizer):
-    """Loads a custom LlamaForCausalLM subclass based on config."""
-    dtype_map = {"fp32": torch.float32, "fp16": torch.float16, "bf16": torch.bfloat16}
-    dtype = dtype_map.get(config.precision, torch.bfloat16)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    dtype = dtype_map.get(precision, torch.bfloat16)
     
-    custom_model_class = _get_class_from_string(config.custom_class_path)
-    
-    model = custom_model_class.from_pretrained(
-        config.model_path,
-        dtype=dtype,
-        **config.custom_params
-    ).to(device)
+    model_path = config.model_path
+    if not model_path:
+        raise ValueError("model_path must be provided to load a base Llama model.")
 
+    model = AutoModelForCausalLM.from_pretrained(model_path, config=config, torch_dtype=dtype)
     return model
 
 @register_model_loader(AugmentedLlamaConfig)
-def _load_augmented_llama(config: AugmentedLlamaConfig, tokenizer: AutoTokenizer):
+def _load_augmented_llama(config: AugmentedLlamaConfig, precision: str, **kwargs):
     """Loads an AugmentedLlamaForCausalLM model and initializes its soft prompt if configured."""
-    model = _load_custom_model(config, tokenizer)
+    dtype_map = {"fp32": torch.float32, "fp16": torch.float16, "bf16": torch.bfloat16}
+    dtype = dtype_map.get(precision, torch.bfloat16)
 
-    # Perform the specific initialization for the augmented model
-    if config.initialization_context_text:
-        print("Performing soft prompt initialization...")
-        initialize_soft_prompt(
-            model=model,
-            tokenizer=tokenizer,
-            context_text=config.initialization_context_text,
-            noise_level=config.initialization_noise_level
-        )
+    model_path = config.model_path
+    if not model_path:
+        raise ValueError("model_path must be provided to load an AugmentedLlama model.")
+
+    model = AugmentedLlamaForCausalLM.from_pretrained(model_path, config=config, torch_dtype=dtype)
     
     return model
 
-def load_model_from_config(model_config):
+def load_model_from_config(model_config: Any, model_precision: str, adapter_config: Optional[PeftConfig] = None):
     """
-    Loads a model and its tokenizer based on a provided configuration object.
-    Dispatches to appropriate loader function using a type-based registry.
+    Loads a model and its tokenizer based on the compositional configuration.
+    1. Loads the base model using the `model_config`.
+    2. Applies a PEFT adapter if `adapter_config` is present.
     """
-    config_type = type(model_config)
-    loader_fn = None
-    if config_type in MODEL_LOADER_REGISTRY:
-        loader_fn = MODEL_LOADER_REGISTRY[config_type]
-    else:
-        # Check for parent classes in the registry for inheritance
-        for base_class in config_type.__mro__[1:]:
-            if base_class in MODEL_LOADER_REGISTRY:
-                loader_fn = MODEL_LOADER_REGISTRY[base_class]
-                break
-    
-    if loader_fn is None:
-        raise ValueError(f"No model loader registered for config type: {type(model_config).__name__}. "
-                         f"Available types: {[c.__name__ for c in MODEL_LOADER_REGISTRY.keys()]}")
-    
+    # --- 1. Load Tokenizer ---
     tokenizer = AutoTokenizer.from_pretrained(model_config.model_path)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model = loader_fn(model_config, tokenizer)
+    # --- 2. Load Base Model ---
+    config_type = type(model_config)
+    loader_fn = MODEL_LOADER_REGISTRY.get(config_type)
     
-    return model, tokenizer
+    if loader_fn is None:
+        # Fallback for inheritance (e.g., if a loader is registered for LlamaConfig and we get a subclass)
+        for base_class in config_type.__mro__[1:]:
+            if base_class in MODEL_LOADER_REGISTRY:
+                loader_fn = MODEL_LOADER_REGISTRY[base_class]
+                break
+
+    if loader_fn is None:
+        raise ValueError(f"No model loader registered for config type: {config_type.__name__}. "
+                         f"Available types: {[c.__name__ for c in MODEL_LOADER_REGISTRY.keys()]}")
+    
+    # Pass precision to the loader function
+    base_model = loader_fn(model_config, precision=model_precision)
+
+    # --- 3. Apply Adapter (if specified) ---
+    if adapter_config:
+        peft_config = hydra.utils.instantiate(adapter_config)
+        final_model = get_peft_model(base_model, peft_config)
+        final_model.print_trainable_parameters()
+    else:
+        final_model = base_model
+
+    # --- 4. Post-load initialization (e.g., for soft prompts) ---
+    if isinstance(model_config, AugmentedLlamaConfig) and model_config.initialization_context_text:
+        print("Performing soft prompt initialization...")
+        initialize_soft_prompt(
+            model=final_model,
+            tokenizer=tokenizer,
+            context_text=model_config.initialization_context_text,
+            noise_level=model_config.initialization_noise_level
+        )
+
+    return final_model, tokenizer
 
 def initialize_soft_prompt(
     model: PreTrainedModel,
@@ -133,7 +108,6 @@ def initialize_soft_prompt(
     context_ids = tokenizer(context_text, return_tensors="pt").input_ids
     virtual_token_count = context_ids.shape[1]
 
-    # Assumes the model has a 'model.rebuild_virtual_prompt' method.
     if not hasattr(model, 'model') or not hasattr(model.model, 'rebuild_virtual_prompt'):
         raise TypeError("The provided model is not a compatible AugmentedLlamaForCausalLM instance.")
     
@@ -150,38 +124,3 @@ def initialize_soft_prompt(
 
     model.model.set_virtual_prompt_weights(initial_weights)
     print(f"Initialized soft prompt with {virtual_token_count} tokens from context.")
-
-def prepare_identical_context_embeddings(
-    context_text: str,
-    prompt_text: str,
-    tokenizer: PreTrainedTokenizer,
-    model: PreTrainedModel,
-    virtual_token_count: Optional[int] = None
-) -> tuple[nn.Embedding, torch.Tensor, torch.Tensor, torch.Tensor, int]:
-    """
-    Prepares an nn.Embedding object for virtual tokens and prompt embeddings
-    for a "no-op" comparison in the PoC script.
-    """
-    device = model.device
-
-    if virtual_token_count is None:
-        context_ids_for_length = tokenizer(context_text, return_tensors="pt").input_ids
-        virtual_token_count = context_ids_for_length.shape[1]
-
-    full_prompt_ids = tokenizer(context_text + prompt_text, return_tensors="pt").input_ids.to(device)
-
-    context_ids_from_full = full_prompt_ids[:, :virtual_token_count]
-    prompt_ids_from_full = full_prompt_ids[:, virtual_token_count:]
-    
-    with torch.no_grad():
-        embed_tokens_layer = model.model.embed_tokens if hasattr(model, 'model') else model.embed_tokens
-        initial_virtual_token_tensor = embed_tokens_layer(context_ids_from_full)
-        prompt_embeds = embed_tokens_layer(prompt_ids_from_full)
-
-    # Create an nn.Embedding layer for the virtual prompt and load the weights
-    initial_virtual_prompt_embedding = nn.Embedding(virtual_token_count, model.config.hidden_size)
-    initial_virtual_prompt_embedding.weight.data.copy_(initial_virtual_token_tensor.squeeze(0))
-
-    prompt_attention_mask = torch.ones_like(prompt_ids_from_full)
-
-    return initial_virtual_prompt_embedding, prompt_embeds, prompt_attention_mask, full_prompt_ids, virtual_token_count

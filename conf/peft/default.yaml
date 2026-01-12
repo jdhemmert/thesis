@@ -1,4 +1,0 @@
-defaults:
-  - lora: lora_default
-  - prefix: prefix_default
-  - prompt: prompt_default

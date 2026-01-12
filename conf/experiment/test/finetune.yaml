@@ -1,7 +1,0 @@
-# @package _global_
-
-model: llama3_custom
-dataset: qa_finetune_6k
-
-task:
-  learning_rate: 9.99e-5

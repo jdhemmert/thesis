@@ -1,8 +1,0 @@
-_target_: src.configs.models.AugmentedLlamaConfig
-model_path: "meta-llama/Llama-3.2-3B"
-precision: "bf16"
-
-custom_class_path: src.models.augmented_llama.AugmentedLlamaForCausalLM
-# custom_params:
-#   memory_slots: 512
-#   num_memory_layers: 2

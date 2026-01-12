@@ -1,7 +1,0 @@
-defaults:
-  - experiment_name: base
-  - model: peft_llama
-  - task: finetune
-  - dataset: qa_finetune_12k
-  - optional experiment: ${experiment_name}/finetune
-  - override hydra/launcher: local_accelerate

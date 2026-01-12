@@ -1,14 +1,28 @@
-from typing import Optional, Tuple, List
-
+from typing import Optional, Tuple, List, Any
 import torch
 import torch.nn as nn
-from transformers import LlamaModel, LlamaForCausalLM
+from transformers import LlamaModel, LlamaForCausalLM, LlamaConfig
 from transformers.modeling_outputs import BaseModelOutputWithPast
 from transformers.models.llama.modeling_llama import LlamaAttention
+from dataclasses import dataclass, field
+
+@dataclass
+class AugmentedLlamaConfig(LlamaConfig):
+    """
+    Configuration for the Augmented Llama model.
+    This dataclass should live within src/models/augmented_llama.py.
+    """
+    # Custom parameters for AugmentedLlamaModel's soft-prompt
+    virtual_token_count: int = 20
+    insert_layer: int = 0
+
+    # Parameters for soft prompt initialization
+    initialization_context_text: Optional[str] = None
+    initialization_noise_level: float = 0.0
 
 class AugmentedLlamaModel(LlamaModel):
 
-    def __init__(self, config, insert_layer=0, virtual_token_count=None):
+    def __init__(self, config: LlamaConfig, insert_layer: int = 0, virtual_token_count: int = 0):
         super().__init__(config)
         self.insert_layer = insert_layer
         self.virtual_token_count = None
@@ -107,13 +121,23 @@ class AugmentedLlamaModel(LlamaModel):
 
 
 class AugmentedLlamaForCausalLM(LlamaForCausalLM):
-    def __init__(self, config, **kwargs):
+    def __init__(self, config: AugmentedLlamaConfig): # Consume our custom config
+        # AugmentedLlamaConfig inherits LlamaConfig, so super() can accept it
         super().__init__(config)
-        self.model = AugmentedLlamaModel(config, **kwargs)
+
+        # Initialize our custom model component with parameters from our config
+        self.model = AugmentedLlamaModel(
+            config, # Pass the config object directly to AugmentedLlamaModel
+            insert_layer=config.insert_layer,
+            virtual_token_count=config.virtual_token_count
+        )
         self.vocab_size = config.vocab_size
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
 
         self.post_init()
+
+    # The from_pretrained method will be handled by the _load_augmented_llama function in src/utils/model.py
+    # which will construct and pass our AugmentedLlamaConfig to this __init__ method.
 
     def forward(
         self,

@@ -1,1 +1,2 @@
 model_path: "meta-llama/Llama-3.2-3B"
+_target_: transformers.LlamaConfig
