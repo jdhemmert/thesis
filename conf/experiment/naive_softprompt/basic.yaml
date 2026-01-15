@@ -1,7 +1,7 @@
 # @package _global_
 
 defaults:
-  - override /task: train_memory
+  - override /task:  train_memory
   - override /model: standard
   - _self_
 
