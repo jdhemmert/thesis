@@ -57,7 +57,7 @@ class MemoryBankTrainer(Trainer):
         self.T = temperature
         super().__init__(**kwargs)
 
-    def compute_loss(self, model, inputs, return_outputs=False):
+    def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
         oracle_outputs = model(
             input_ids=inputs["oracle_input_ids"],
             attention_mask=inputs["oracle_attention_mask"],
