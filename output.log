@@ -1,126 +1,34 @@
+`torch_dtype` is deprecated! Use `dtype` instead!
+Running TrainMemoryTask: train_memory
+Fetching 2 files:   0%|                                                                                                                      | 0/2 [00:00<?, ?it/s]Fetching 2 files: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████| 2/2 [00:00<00:00, 40920.04it/s]
+Loading checkpoint shards:   0%|                                                                                                             | 0/2 [00:00<?, ?it/s]Loading checkpoint shards: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████| 2/2 [00:00<00:00, 83.19it/s]
+/home/jhemmer/projects/thesis/src/tasks/train_memory.py:58: FutureWarning: `tokenizer` is deprecated and will be removed in version 5.0.0 for `MemoryBankTrainer.__init__`. Use `processing_class` instead.
+  super().__init__(**kwargs)
+The tokenizer has new PAD/BOS/EOS tokens that differ from the model config and generation config. The model config and generation config were aligned accordingly, being updated with the tokenizer's values. Updated tokens: {'pad_token_id': 128001}.
+Starting memory training...
+  0%|                                                                                                                                      | 0/750 [00:00<?, ?it/s]You're using a PreTrainedTokenizerFast tokenizer. Please note that with a fast tokenizer, using the `__call__` method is faster than using a method to encode the text followed by a call to the `pad` method to get a padded encoding.
+Error executing job with overrides: ['+experiment=naive_softprompt/basic']
 Traceback (most recent call last):
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/utils.py", line 220, in run_and_report
-    return func()
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/utils.py", line 458, in <lambda>
-    lambda: hydra.run(
-            ~~~~~~~~~^
-        config_name=config_name,
-        ^^^^^^^^^^^^^^^^^^^^^^^^
-        task_function=task_function,
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        overrides=overrides,
-        ^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/hydra.py", line 105, in run
-    cfg = self.compose_config(
-        config_name=config_name,
+  File "/home/jhemmer/projects/thesis/main.py", line 15, in main
+    cfg.task.main(cfg)
+    ~~~~~~~~~~~~~^^^^^
+  File "/home/jhemmer/projects/thesis/src/tasks/train_memory.py", line 209, in main
+    trainer.train()
+    ~~~~~~~~~~~~~^^
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/transformers/trainer.py", line 2325, in train
+    return inner_training_loop(
+        args=args,
     ...<2 lines>...
-        run_mode=RunMode.RUN,
+        ignore_keys_for_eval=ignore_keys_for_eval,
     )
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/hydra.py", line 594, in compose_config
-    cfg = self.config_loader.load_configuration(
-        config_name=config_name,
-    ...<3 lines>...
-        validate_sweep_overrides=validate_sweep_overrides,
-    )
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/config_loader_impl.py", line 142, in load_configuration
-    return self._load_configuration_impl(
-           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
-        config_name=config_name,
-        ^^^^^^^^^^^^^^^^^^^^^^^^
-    ...<3 lines>...
-        validate_sweep_overrides=validate_sweep_overrides,
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/config_loader_impl.py", line 253, in _load_configuration_impl
-    defaults_list = create_defaults_list(
-        repo=caching_repo,
-    ...<3 lines>...
-        skip_missing=run_mode == RunMode.MULTIRUN,
-    )
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/defaults_list.py", line 745, in create_defaults_list
-    defaults, tree = _create_defaults_list(
-                     ~~~~~~~~~~~~~~~~~~~~~^
-        repo,
-        ^^^^^
-    ...<3 lines>...
-        skip_missing=skip_missing,
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^
-    )
-    ^
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/defaults_list.py", line 715, in _create_defaults_list
-    defaults_tree = _create_defaults_tree(
-        repo=repo,
-    ...<4 lines>...
-        skip_missing=skip_missing,
-    )
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/defaults_list.py", line 356, in _create_defaults_tree
-    ret = _create_defaults_tree_impl(
-        repo=repo,
-    ...<4 lines>...
-        overrides=overrides,
-    )
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/defaults_list.py", line 457, in _create_defaults_tree_impl
-    return _expand_virtual_root(repo, root, overrides, skip_missing)
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/defaults_list.py", line 280, in _expand_virtual_root
-    subtree = _create_defaults_tree_impl(
-        repo=repo,
-    ...<4 lines>...
-        overrides=overrides,
-    )
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/defaults_list.py", line 583, in _create_defaults_tree_impl
-    subtree = _create_defaults_tree_impl(
-        repo=repo,
-    ...<4 lines>...
-        overrides=overrides,
-    )
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/defaults_list.py", line 466, in _create_defaults_tree_impl
-    update_package_header(repo=repo, node=parent)
-    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/defaults_list.py", line 262, in update_package_header
-    loaded = repo.load_config(config_path=node.get_config_path())
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/config_repository.py", line 348, in load_config
-    ret = self.delegate.load_config(config_path=config_path)
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/config_repository.py", line 91, in load_config
-    ret = source.load_config(config_path=config_path)
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/hydra/_internal/core_plugins/file_config_source.py", line 31, in load_config
-    cfg = OmegaConf.load(f)
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/omegaconf/omegaconf.py", line 192, in load
-    obj = yaml.load(file_, Loader=get_yaml_loader())
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/yaml/__init__.py", line 81, in load
-    return loader.get_single_data()
-           ~~~~~~~~~~~~~~~~~~~~~~^^
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/yaml/constructor.py", line 49, in get_single_data
-    node = self.get_single_node()
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/yaml/composer.py", line 36, in get_single_node
-    document = self.compose_document()
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/yaml/composer.py", line 55, in compose_document
-    node = self.compose_node(None, None)
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/yaml/composer.py", line 84, in compose_node
-    node = self.compose_mapping_node(anchor)
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/yaml/composer.py", line 133, in compose_mapping_node
-    item_value = self.compose_node(node, item_key)
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/yaml/composer.py", line 84, in compose_node
-    node = self.compose_mapping_node(anchor)
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/yaml/composer.py", line 133, in compose_mapping_node
-    item_value = self.compose_node(node, item_key)
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/yaml/composer.py", line 84, in compose_node
-    node = self.compose_mapping_node(anchor)
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/yaml/composer.py", line 127, in compose_mapping_node
-    while not self.check_event(MappingEndEvent):
-              ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/yaml/parser.py", line 98, in check_event
-    self.current_event = self.state()
-                         ~~~~~~~~~~^^
-  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/yaml/parser.py", line 438, in parse_block_mapping_key
-    raise ParserError("while parsing a block mapping", self.marks[-1],
-            "expected <block end>, but found %r" % token.id, token.start_mark)
-yaml.parser.ParserError: while parsing a block mapping
-  in "/home/jhemmer/projects/thesis/conf/experiment/test_augmented/train_memory.yaml", line 28, column 5
-expected <block end>, but found '<scalar>'
-  in "/home/jhemmer/projects/thesis/conf/experiment/test_augmented/train_memory.yaml", line 28, column 27
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/transformers/trainer.py", line 2674, in _inner_training_loop
+    tr_loss_step = self.training_step(model, inputs, num_items_in_batch)
+  File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/transformers/trainer.py", line 4020, in training_step
+    loss = self.compute_loss(model, inputs, num_items_in_batch=num_items_in_batch)
+TypeError: MemoryBankTrainer.compute_loss() got an unexpected keyword argument 'num_items_in_batch'
+
+Set the environment variable HYDRA_FULL_ERROR=1 for a complete stack trace.
+  0%|                                                                                                                                      | 0/750 [00:00<?, ?it/s]
 Traceback (most recent call last):
   File "/home/jhemmer/projects/thesis/venv_uv/bin/accelerate", line 10, in <module>
     sys.exit(main())
@@ -133,4 +41,4 @@ Traceback (most recent call last):
     ~~~~~~~~~~~~~~~^^^^^^
   File "/home/jhemmer/projects/thesis/venv_uv/lib/python3.13/site-packages/accelerate/commands/launch.py", line 869, in simple_launcher
     raise subprocess.CalledProcessError(returncode=process.returncode, cmd=cmd)
-subprocess.CalledProcessError: Command '['/home/jhemmer/projects/thesis/venv_uv/bin/python3', '-m', 'src.training.train_memory', 'experiment_name=test_augmented']' returned non-zero exit status 1.
+subprocess.CalledProcessError: Command '['/home/jhemmer/projects/thesis/venv_uv/bin/python3', '-m', 'main', '+experiment=naive_softprompt/basic']' returned non-zero exit status 1.

@@ -179,7 +179,7 @@ class TrainMemoryTask:
             seed=self.config.seed,
             remove_unused_columns=False,
             ddp_find_unused_parameters=False,
-            evaluation_strategy="steps",
+            eval_strategy="steps",
             eval_steps=self.config.eval_steps,
             save_strategy="steps",
         )
