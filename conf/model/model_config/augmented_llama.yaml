@@ -1,0 +1,6 @@
+defaults:
+    - base_llama
+    - _self_
+
+_target_: src.models.augmented_llama.AugmentedLlamaConfig
+virtual_token_count: 20

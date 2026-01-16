@@ -95,6 +95,7 @@ class TrainMemoryTaskConfig(BaseTaskConfig):
     sample_strategy: str = 'random'
     log_predictions: bool = True
     extrinsic_validation: str = "never"
+    save_strategy: str = "steps"
     
     # Flattened loss parameters
     loss_type: str = "balanced"
@@ -102,7 +103,7 @@ class TrainMemoryTaskConfig(BaseTaskConfig):
     temperature: float = 0.5
 
     # Flattened optimizer parameters
-    trainable_strategy: str = "all"
+    trainable_strategy: str = "never" # always, never, end
 
 
 class TrainMemoryTask:
@@ -181,7 +182,7 @@ class TrainMemoryTask:
             ddp_find_unused_parameters=False,
             eval_strategy="steps",
             eval_steps=self.config.eval_steps,
-            save_strategy="steps",
+            save_strategy=self.config.save_strategy,
         )
 
         trainer_dataset = tokenized_dataset.remove_columns(

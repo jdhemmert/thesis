@@ -6,19 +6,24 @@ from transformers.modeling_outputs import BaseModelOutputWithPast
 from transformers.models.llama.modeling_llama import LlamaAttention
 from dataclasses import dataclass, field
 
-@dataclass
 class AugmentedLlamaConfig(LlamaConfig):
     """
     Configuration for the Augmented Llama model.
     This dataclass should live within src/models/augmented_llama.py.
     """
-    # Custom parameters for AugmentedLlamaModel's soft-prompt
-    virtual_token_count: int = 20
-    insert_layer: int = 0
-
-    # Parameters for soft prompt initialization
-    initialization_context_text: Optional[str] = None
-    initialization_noise_level: float = 0.0
+    def __init__(
+        self,
+        virtual_token_count=20,
+        insert_layer=0,
+        initialization_context_text=None,
+        initialization_noise_level=0.0,
+        **kwargs
+    ):
+        super().__init__(**kwargs)
+        self.virtual_token_count = virtual_token_count
+        self.insert_layer = insert_layer
+        self.initialization_context_text = initialization_context_text
+        self.initialization_noise_level = initialization_noise_level
 
 class AugmentedLlamaModel(LlamaModel):
 

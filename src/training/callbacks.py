@@ -10,7 +10,7 @@ class ExtrinsicValidationCallback(TrainerCallback):
         self.eval_dataset = eval_dataset
         self.tokenizer = tokenizer
         self.cfg_task = cfg_task
-        self.validation_policy = cfg_task.get("extrinsic_validation", "always")
+        self.validation_policy = cfg_task.extrinsic_validation or "always"
 
     def on_evaluate(self, args, state, control, **kwargs):
         if self.validation_policy == "always":
