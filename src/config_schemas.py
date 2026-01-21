@@ -32,3 +32,6 @@ class Config:
     task: BaseTaskConfig = field(default=MISSING)
     dataset: DatasetConfig = field(default_factory=DatasetConfig)
 
+    experiment_path: str = field(default="scratch")
+    base_output_dir: str = field(default=MISSING)
+

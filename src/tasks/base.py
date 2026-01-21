@@ -17,7 +17,7 @@ class BaseTask:
     def __init__(self, **kwargs):
         self.config = BaseTaskConfig(**kwargs)
 
-    def main(self, cfg):
+    def main(self, cwd, cfg):
         print("This is an empty task. You will want to select one to run, "
               "either by setting one explicitly via the `task=...` flag, "
               "or by choosing an experiment via the `+experiment=...` flag "

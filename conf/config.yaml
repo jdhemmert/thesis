@@ -3,3 +3,10 @@ defaults:
   - _self_
   - task: default_task
   - model: standard
+
+base_output_dir: results/${experiment_path}/${now:%Y-%m-%d_%H-%M-%S}
+hydra:
+    run:
+        dir: ${base_output_dir}
+    sweep:
+        dir: ${base_output_dir}

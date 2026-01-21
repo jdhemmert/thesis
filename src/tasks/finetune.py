@@ -99,7 +99,7 @@ class FinetuneTask:
             learning_rate=learning_rate, sample_n=sample_n
         )
 
-    def main(self, cfg: DictConfig):
+    def main(self, cwd: str, cfg: DictConfig):
         """
         Main entrypoint for the finetuning task.
         """
@@ -124,7 +124,7 @@ class FinetuneTask:
         eval_dataset = split_dataset["test"]
 
         training_args = TrainingArguments(
-            output_dir=self.config.output_dir,
+            output_dir=f"{cwd}/model",
             learning_rate=self.config.learning_rate,
             num_train_epochs=self.config.epochs,
             per_device_train_batch_size=cfg.dataset.physical_batch_size,

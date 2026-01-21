@@ -5,7 +5,20 @@ defaults:
   - override /model/model_config: augmented_llama
   - _self_
 
+
+experiment_path: "naive_softprompt/test"
+hydra:
+    mode: MULTIRUN
+    sweep:
+        subdir: ${task.num_train_epochs}_epochs
+    sweeper:
+        params:
+            task.num_train_epochs: 1, 2
+
 task:
-    trainable_strategy: soft_prompt_only
-    extrinsic_validation: end
-    save_strategy: "no"
+    num_train_epochs: 1
+    trainable_strategy: "soft_prompt_only"
+    extrinsic_validation:
+        frequency: END
+        sample_count: 100
+        log_predictions: yes

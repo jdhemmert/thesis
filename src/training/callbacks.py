@@ -1,23 +1,40 @@
 import os
 import json
+
+from dataclasses import dataclass
+from enum import Enum
+
 import torch
 import evaluate
 from transformers import TrainerCallback
 
+class ExtrinsicValidationFrequency(Enum):
+    ALWAYS = "always"
+    NEVER  = "never"
+    END    = "end"
+
+@dataclass
+class ExtrinsicValidationConfig:
+    frequency: ExtrinsicValidationFrequency = ExtrinsicValidationFrequency.NEVER
+    sample_count: int = 10
+    log_predictions: bool = False
+
 class ExtrinsicValidationCallback(TrainerCallback):
     
-    def __init__(self, eval_dataset, tokenizer, cfg_task):
+    def __init__(self, config, eval_dataset, tokenizer, output_dir):
+        self.config = config
         self.eval_dataset = eval_dataset
         self.tokenizer = tokenizer
-        self.cfg_task = cfg_task
-        self.validation_policy = cfg_task.extrinsic_validation or "always"
+        self.output_dir = output_dir
+        #self.cfg_task = cfg_task
+        #self.validation_policy = cfg_task.extrinsic_validation or "always"
 
     def on_evaluate(self, args, state, control, **kwargs):
-        if self.validation_policy == "always":
+        if self.config.frequency == ExtrinsicValidationFrequency.ALWAYS:
             self._run_validation(state, **kwargs)
 
     def on_train_end(self, args, state, control, **kwargs):
-        if self.validation_policy == "end" or self.validation_policy == "always":
+        if self.config.frequency != ExtrinsicValidationFrequency.NEVER:
             self._run_validation(state, **kwargs)
 
     def _run_validation(self, state, **kwargs):
@@ -41,7 +58,7 @@ class ExtrinsicValidationCallback(TrainerCallback):
         all_questions_for_log = []
 
         model.eval()
-        for example in eval_dataset:
+        for _, example in zip(range(self.config.sample_count), eval_dataset):
             input_ids = torch.tensor([example['memory_input_ids']]).to(model.device)
             attention_mask = torch.tensor([example['memory_attention_mask']]).to(model.device)
 
@@ -71,8 +88,8 @@ class ExtrinsicValidationCallback(TrainerCallback):
 
         print(f"Extrinsic ROUGE Scores: {rouge_scores}")
 
-        if state.is_world_process_zero and self.cfg_task.log_predictions:
-            log_file_path = os.path.join(self.cfg_task.output_dir, f"prediction_log.epoch_{int(state.epoch)}.jsonl")
+        if state.is_world_process_zero and self.config.log_predictions:
+            log_file_path = os.path.join(self.output_dir, f"prediction_log.epoch_{int(state.epoch)}.jsonl")
             print(f"Logging predictions to {log_file_path}")
             with open(log_file_path, "w") as f:
                 for i in range(len(all_preds)):

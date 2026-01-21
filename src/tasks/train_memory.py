@@ -8,7 +8,7 @@ from transformers import TrainingArguments, Trainer, AutoTokenizer, AutoModelFor
 
 from src.tasks.base import BaseTaskConfig, register_task
 from src.training.losses import self_distillation_loss
-from src.training.callbacks import ExtrinsicValidationCallback
+from src.training.callbacks import ExtrinsicValidationFrequency, ExtrinsicValidationConfig, ExtrinsicValidationCallback
 from src.utils.model import load_model_from_config
 
 
@@ -84,7 +84,6 @@ class TrainMemoryTaskConfig(BaseTaskConfig):
     # Config for the memory training task.
     _target_: str = "src.tasks.train_memory.TrainMemoryTask"
     name: str = "train_memory"
-    output_dir: str = "models/memory_model_custom"
     learning_rate: float = 2e-4
     num_train_epochs: int = 3
     precision: str = "bf16"
@@ -94,7 +93,7 @@ class TrainMemoryTaskConfig(BaseTaskConfig):
     sample_n: int = 1000
     sample_strategy: str = 'random'
     log_predictions: bool = True
-    extrinsic_validation: str = "never"
+    extrinsic_validation: ExtrinsicValidationConfig = field(default_factory=ExtrinsicValidationConfig)
     save_strategy: str = "steps"
     
     # Flattened loss parameters
@@ -137,18 +136,23 @@ class TrainMemoryTask:
                 dataset = dataset.shuffle(seed=self.config.seed).select(range(self.config.sample_n))
             else: # first_n
                 dataset = dataset.select(range(self.config.sample_n))
+
+        if self.config.extrinsic_validation.frequency != ExtrinsicValidationFrequency.NEVER:
+            remove_columns = None
+        else:
+            remove_columns = original_columns
         
         tokenized_dataset = dataset.map(
             lambda examples: self._preprocess(examples, tokenizer=tokenizer),
             batched=True,
-            remove_columns=original_columns
+            remove_columns=remove_columns
         )
         return tokenized_dataset
 
     def __init__(self, **kwargs):
         self.config = TrainMemoryTaskConfig(**kwargs)
 
-    def main(self, cfg: DictConfig):
+    def main(self, cwd: str, cfg: DictConfig):
         """
         Main entrypoint for the memory training task.
         Incorporates the logic from the 'sequential' training strategy.
@@ -172,7 +176,7 @@ class TrainMemoryTask:
                     param.requires_grad = False
         
         training_args = TrainingArguments(
-            output_dir=self.config.output_dir,
+            output_dir=f"{cwd}/model",
             learning_rate=self.config.learning_rate,
             num_train_epochs=self.config.num_train_epochs,
             per_device_train_batch_size=cfg.dataset.physical_batch_size,
@@ -190,8 +194,8 @@ class TrainMemoryTask:
         )
 
         callbacks = []
-        if self.config.extrinsic_validation != "never":
-            callbacks.append(ExtrinsicValidationCallback(tokenized_dataset, tokenizer, self.config))
+        if self.config.extrinsic_validation != ExtrinsicValidationFrequency.NEVER:
+            callbacks.append(ExtrinsicValidationCallback(self.config.extrinsic_validation, tokenized_dataset, tokenizer, cwd))
 
         trainer = MemoryBankTrainer(
             model=model,
