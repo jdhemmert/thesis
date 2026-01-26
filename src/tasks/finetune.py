@@ -13,7 +13,6 @@ from src.utils.model import load_model_from_config
 class FinetuneTaskConfig(BaseTaskConfig):
     _target_: str = "src.tasks.finetune.FinetuneTask"
     name: str = "finetune"
-    output_dir: str = "models/finetuned_model"
     log_dir: str = "logs"
     seed: int = 42
     gpu_ids: Optional[str] = None
@@ -77,27 +76,8 @@ class FinetuneTask:
         )
         return tokenized_dataset
 
-    def __init__(
-        self,
-        name: str,
-        output_dir: str,
-        log_dir: str,
-        seed: int,
-        epochs: int,
-        precision: str,
-        max_seq_length: int,
-        eval_steps: int,
-        learning_rate: float,
-        gpu_ids: Optional[str] = None,
-        sample_n: Optional[int] = None,
-        **kwargs,
-    ):
-        self.config = FinetuneTaskConfig(
-            name=name, output_dir=output_dir, log_dir=log_dir, seed=seed,
-            gpu_ids=gpu_ids, epochs=epochs, precision=precision,
-            max_seq_length=max_seq_length, eval_steps=eval_steps,
-            learning_rate=learning_rate, sample_n=sample_n
-        )
+    def __init__(self, **kwargs):
+        self.config = FinetuneTaskConfig(**kwargs)
 
     def main(self, cwd: str, cfg: DictConfig):
         """
