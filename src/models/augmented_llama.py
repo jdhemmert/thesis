@@ -6,10 +6,10 @@ from transformers.modeling_outputs import BaseModelOutputWithPast
 from transformers.models.llama.modeling_llama import LlamaAttention
 from dataclasses import dataclass, field
 
+
 class AugmentedLlamaConfig(LlamaConfig):
     """
     Configuration for the Augmented Llama model.
-    This dataclass should live within src/models/augmented_llama.py.
     """
     def __init__(
         self,
@@ -90,17 +90,17 @@ class AugmentedLlamaModel(LlamaModel):
 
         if inputs_embeds is None:
             inputs_embeds = self.embed_tokens(input_ids)
-        
+
+        # Prioritize passed virtual_tokens, fall back to stored tokens
         final_virtual_tokens = None
-        # Priority 1: Use virtual_tokens if they are manually passed in (for PoC or dynamic use).
         if virtual_tokens is not None:
             final_virtual_tokens = virtual_tokens
-        # Priority 2: Otherwise, use the internal trainable prompt if it exists.
         elif self.virtual_prompt is not None and self.virtual_token_count > 0:
             batch_size = inputs_embeds.shape[0]
             prompt_indices = torch.arange(self.virtual_token_count, device=inputs_embeds.device)
             final_virtual_tokens = self.virtual_prompt(prompt_indices).unsqueeze(0).expand(batch_size, -1, -1)
-        
+
+        # Only append virtual_tokens on the first pass
         if final_virtual_tokens is not None and past_key_values is None:
             inputs_embeds = torch.cat([final_virtual_tokens, inputs_embeds], dim=1)
 
@@ -113,7 +113,7 @@ class AugmentedLlamaModel(LlamaModel):
                 attention_mask = torch.cat([virtual_attention_mask, attention_mask], dim=1)
 
         return super().forward(
-            input_ids=None, # We are now using inputs_embeds
+            input_ids=None,
             attention_mask=attention_mask,
             position_ids=position_ids,
             past_key_values=past_key_values,
@@ -126,13 +126,11 @@ class AugmentedLlamaModel(LlamaModel):
 
 
 class AugmentedLlamaForCausalLM(LlamaForCausalLM):
-    def __init__(self, config: AugmentedLlamaConfig): # Consume our custom config
-        # AugmentedLlamaConfig inherits LlamaConfig, so super() can accept it
+    def __init__(self, config: AugmentedLlamaConfig):
         super().__init__(config)
 
-        # Initialize our custom model component with parameters from our config
         self.model = AugmentedLlamaModel(
-            config, # Pass the config object directly to AugmentedLlamaModel
+            config,
             insert_layer=config.insert_layer,
             virtual_token_count=config.virtual_token_count
         )
@@ -140,9 +138,6 @@ class AugmentedLlamaForCausalLM(LlamaForCausalLM):
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
 
         self.post_init()
-
-    # The from_pretrained method will be handled by the _load_augmented_llama function in src/utils/model.py
-    # which will construct and pass our AugmentedLlamaConfig to this __init__ method.
 
     def forward(
         self,

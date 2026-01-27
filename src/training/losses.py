@@ -32,10 +32,10 @@ def self_distillation_loss(
     soft_oracle_probs = softmax(oracle_logits / temperature)
     soft_memory_log_probs = log_softmax(memory_logits / temperature)
 
-    # KL-Divergence Loss (scaled by T^2 as in Hinton's paper)
+    # KL-Divergence loss: distill "hidden" knowledge
     kl_loss = kl_loss_fct(soft_memory_log_probs, soft_oracle_probs) * (temperature**2)
 
-    # Cross-Entropy Loss against the hard labels from the oracle
+    # Cross-Entropy loss: emulate behavior
     ce_loss = ce_loss_fct(memory_logits.transpose(1, 2), oracle_logits.argmax(dim=-1))
 
     if loss_type == "balanced":

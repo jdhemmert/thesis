@@ -60,15 +60,12 @@ class FinetuneTask:
 
     def _load_data(self, tokenizer, dataset_config):
         """Loads, samples, and preprocesses the dataset for finetuning."""
-        # 1. Load the raw dataset
         dataset = load_dataset("json", data_files=dataset_config.path)["train"]
         original_columns = list(dataset.column_names)
 
-        # 2. Handle sampling
         if self.config.sample_n:
             dataset = dataset.shuffle(seed=self.config.seed).select(range(self.config.sample_n))
 
-        # 3. Apply the preprocessing function
         tokenized_dataset = dataset.map(
             lambda examples: self._preprocess(examples, tokenizer=tokenizer),
             batched=True,
@@ -88,7 +85,6 @@ class FinetuneTask:
         if self.config.gpu_ids:
             os.environ["CUDA_VISIBLE_DEVICES"] = self.config.gpu_ids
 
-        # Load model and tokenizer using the utility function
         model, tokenizer = load_model_from_config(
             model_config=cfg.model.model_config,
             model_precision=self.config.precision,

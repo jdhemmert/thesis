@@ -6,7 +6,6 @@ from typing import Optional, Any, Dict
 from transformers import AutoTokenizer, AutoModelForCausalLM, PreTrainedModel, PreTrainedTokenizer, LlamaConfig, PretrainedConfig
 from peft import get_peft_model, PeftConfig
 
-# Import the co-located model config
 from src.models.augmented_llama import AugmentedLlamaForCausalLM, AugmentedLlamaConfig
 
 MODEL_LOADER_REGISTRY = {}
@@ -53,12 +52,10 @@ def load_model_from_config(model_config: Any, model_precision: str, adapter_conf
     1. Loads the base model using the `model_config`.
     2. Applies a PEFT adapter if `adapter_config` is present.
     """
-    # --- 1. Load Tokenizer ---
     tokenizer = AutoTokenizer.from_pretrained(model_config.model_path)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # --- 2. Load Base Model ---
     config_type = type(model_config)
     loader_fn = MODEL_LOADER_REGISTRY.get(config_type)
     
@@ -72,11 +69,9 @@ def load_model_from_config(model_config: Any, model_precision: str, adapter_conf
     if loader_fn is None:
         raise ValueError(f"No model loader registered for config type: {config_type.__name__}. "
                          f"Available types: {[c.__name__ for c in MODEL_LOADER_REGISTRY.keys()]}")
-    
-    # Pass precision to the loader function
+
     base_model = loader_fn(model_config, precision=model_precision)
 
-    # --- 3. Apply Adapter (if specified) ---
     if adapter_config:
         peft_config = hydra.utils.instantiate(adapter_config)
         final_model = get_peft_model(base_model, peft_config)
@@ -84,7 +79,6 @@ def load_model_from_config(model_config: Any, model_precision: str, adapter_conf
     else:
         final_model = base_model
 
-    # --- 4. Post-load initialization (e.g., for soft prompts) ---
     if isinstance(model_config, AugmentedLlamaConfig) and model_config.initialization_context_text:
         print("Performing soft prompt initialization...")
         initialize_soft_prompt(

@@ -50,7 +50,7 @@ class SelfDistillationDataCollator:
 
 
 class MemoryBankTrainer(Trainer):
-    """Custom Trainer for self-distillation loss."""
+    """Custom Trainer for self-distillation."""
     def __init__(self, loss_type, loss_alpha, temperature, **kwargs):
         self.loss_type = loss_type
         self.alpha = loss_alpha
@@ -81,7 +81,6 @@ class MemoryBankTrainer(Trainer):
 @register_task(name="train_memory", group="task")
 @dataclass
 class TrainMemoryTaskConfig(BaseTaskConfig):
-    # Config for the memory training task.
     _target_: str = "src.tasks.train_memory.TrainMemoryTask"
     name: str = "train_memory"
     learning_rate: float = 2e-4
@@ -91,18 +90,16 @@ class TrainMemoryTaskConfig(BaseTaskConfig):
     max_length: int = 512
     eval_steps: int = 100
     sample_n: int = 1000
-    sample_strategy: str = 'random'
+    sample_strategy: str = "random"
     log_predictions: bool = True
     extrinsic_validation: ExtrinsicValidationConfig = field(default_factory=ExtrinsicValidationConfig)
     save_strategy: str = "steps"
     
-    # Flattened loss parameters
     loss_type: str = "balanced"
     alpha: float = 0.2
     temperature: float = 0.5
 
-    # Flattened optimizer parameters
-    trainable_strategy: str = "never" # always, never, end
+    trainable_strategy: str = "all" # all, soft_prompt_only
 
 
 class TrainMemoryTask:

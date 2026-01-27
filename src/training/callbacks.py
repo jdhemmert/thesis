@@ -26,8 +26,6 @@ class ExtrinsicValidationCallback(TrainerCallback):
         self.eval_dataset = eval_dataset
         self.tokenizer = tokenizer
         self.output_dir = output_dir
-        #self.cfg_task = cfg_task
-        #self.validation_policy = cfg_task.extrinsic_validation or "always"
 
     def on_evaluate(self, args, state, control, **kwargs):
         if self.config.frequency == ExtrinsicValidationFrequency.ALWAYS:
