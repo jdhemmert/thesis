@@ -9,7 +9,7 @@ from transformers import TrainingArguments, Trainer, AutoTokenizer, AutoModelFor
 from src.tasks.base import BaseTaskConfig, register_task
 from src.training.losses import self_distillation_loss
 from src.training.callbacks import ExtrinsicValidationFrequency, ExtrinsicValidationConfig, ExtrinsicValidationCallback
-from src.utils.model import load_model_from_config
+from src.models.base import ModelFactory
 
 
 class SelfDistillationDataCollator:
@@ -159,12 +159,8 @@ class TrainMemoryTask:
         self.prompts = cfg.prompts
         
         # Load model and tokenizer using the utility function
-        model, tokenizer = load_model_from_config(
-            model_config=cfg.model.model_config,
-            model_precision=self.config.precision,
-            adapter_config=cfg.model.adapter_config
-        )
-
+        model, tokenizer = ModelFactory.load(cfg)
+        
         tokenized_dataset = self._load_data(tokenizer, cfg.dataset)
 
         # Freeze parameters if needed

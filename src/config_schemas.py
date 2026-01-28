@@ -17,6 +17,7 @@ class DatasetConfig:
 @dataclass
 class ModelConfigGroup:
     """A container for the base model config and an optional adapter config."""
+    architecture: str = MISSING
     model_config: Optional[Any] = field(default=MISSING)
     adapter_config: Optional[PeftConfig] = field(default=None)
     precision: str = field(default="bf16")

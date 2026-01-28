@@ -1,10 +1,11 @@
 import hydra
 from hydra.core.config_store import ConfigStore
 from hydra.core.hydra_config import HydraConfig
-from omegaconf import DictConfig, OmegaConf # Import OmegaConf
+from omegaconf import DictConfig, OmegaConf
 
 from src.config_schemas import Config
 import src.tasks
+import src.models.loaders
 
 cs = ConfigStore.instance()
 cs.store(name="base_config", node=Config)

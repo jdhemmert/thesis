@@ -6,7 +6,7 @@ from datasets import load_dataset
 from transformers import Trainer, TrainingArguments, DataCollatorForLanguageModeling, AutoTokenizer, AutoModelForCausalLM
 
 from src.tasks.base import BaseTaskConfig, register_task
-from src.utils.model import load_model_from_config
+from src.models.base import ModelFactory
 
 @register_task(name="finetune", group="task")
 @dataclass
@@ -87,11 +87,7 @@ class FinetuneTask:
         if self.config.gpu_ids:
             os.environ["CUDA_VISIBLE_DEVICES"] = self.config.gpu_ids
 
-        model, tokenizer = load_model_from_config(
-            model_config=cfg.model.model_config,
-            model_precision=self.config.precision,
-            adapter_config=cfg.model.adapter_config
-        )
+        model, tokenizer = ModelFactory.load(cfg)
         
         tokenized_dataset = self._load_data(tokenizer, cfg.dataset)
         

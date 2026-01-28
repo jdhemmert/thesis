@@ -2,9 +2,8 @@
 
 defaults:
   - override /task:  train_memory
-  - override /model/model_config: augmented_llama
+  - override /model: augmented_llama
   - _self_
-
 
 experiment_path: "naive_softprompt/test"
 hydra:
