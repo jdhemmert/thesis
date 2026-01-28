@@ -109,8 +109,8 @@ class TrainMemoryTask:
         if "biography" not in examples or "question" not in examples:
             raise ValueError("Dataset must contain 'biography' and 'question' columns for self-distillation.")
 
-        oracle_prompts = [f"Biography: {bio}\nQuestion: {q}" for bio, q in zip(examples['biography'], examples['question'])]
-        memory_prompts = [f"Question: {q}" for q in examples['question']]
+        oracle_prompts = [f"Biography: {bio}\nQuestion: {q}\nAnswer:" for bio, q in zip(examples['biography'], examples['question'])]
+        memory_prompts = [f"Question: {q}\nAnswer:" for q in examples['question']]
 
         oracle_inputs = tokenizer(oracle_prompts, truncation=True, max_length=max_length)
         memory_inputs = tokenizer(memory_prompts, truncation=True, max_length=max_length)
