@@ -109,8 +109,8 @@ class TrainMemoryTask:
         if "biography" not in examples or "question" not in examples:
             raise ValueError("Dataset must contain 'biography' and 'question' columns for self-distillation.")
 
-        oracle_prompts = [f"Biography: {bio}\nQuestion: {q}\nAnswer:" for bio, q in zip(examples['biography'], examples['question'])]
-        memory_prompts = [f"Question: {q}\nAnswer:" for q in examples['question']]
+        oracle_prompts = [self.prompts.contextual_qa_generation.format(biography=bio, question=q) for bio, q in zip(examples['biography'], examples['question'])]
+        memory_prompts = [self.prompts.direct_qa_generation.format(question=q) for q in examples['question']]
 
         oracle_inputs = tokenizer(oracle_prompts, truncation=True, max_length=max_length)
         memory_inputs = tokenizer(memory_prompts, truncation=True, max_length=max_length)
@@ -155,6 +155,8 @@ class TrainMemoryTask:
         Incorporates the logic from the 'sequential' training strategy.
         """
         print(f"Running TrainMemoryTask: {self.config.name}")
+
+        self.prompts = cfg.prompts
         
         # Load model and tokenizer using the utility function
         model, tokenizer = load_model_from_config(

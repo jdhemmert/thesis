@@ -21,6 +21,14 @@ class ModelConfigGroup:
     adapter_config: Optional[PeftConfig] = field(default=None)
     precision: str = field(default="bf16")
 
+
+@dataclass
+class PromptConfig:
+    contextual_qa_training: str = "Biography: {biography}\nQuestion: {question}\nAnswer: {answer}"
+    contextual_qa_generation: str = "Biography: {biography}\nQuestion: {question}\nAnswer:"
+    direct_qa_generation: str = "Question: {question}\nAnswer:"
+
+
 @dataclass
 class Config:
     """Top-level configuration schema."""
@@ -31,6 +39,7 @@ class Config:
     model: ModelConfigGroup = field(default_factory=ModelConfigGroup)
     task: BaseTaskConfig = field(default=MISSING)
     dataset: DatasetConfig = field(default_factory=DatasetConfig)
+    prompts: PromptConfig = field(default_factory=PromptConfig)
 
     experiment_path: str = field(default="scratch")
     base_output_dir: str = field(default=MISSING)

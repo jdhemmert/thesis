@@ -30,7 +30,7 @@ class FinetuneTask:
         """Prepares a dataset for standard supervised fine-tuning."""
         max_length = self.config.max_seq_length
         full_prompts = [
-            f"Biography: {bio}\nQuestion: {q}\nAnswer: {a}"
+            self.prompts.contextual_qa_training.format(biography=bio, question=q, answer=a)
             for bio, q, a in zip(
                 examples["biography"],
                 examples["question"],
@@ -46,7 +46,7 @@ class FinetuneTask:
 
         labels = [ row[:] for row in model_inputs["input_ids"] ]
         prompt_only = [
-            f"Biography: {bio}\nQuestion: {q}\nAnswer:"
+            self.prompts.contextual_qa_generation.format(biography=bio, question=q)
             for bio, q in zip(examples["biography"], examples["question"])
         ]
         prompt_token_lengths = [len(tokenizer(p, add_special_tokens=False).input_ids) for p in prompt_only]
@@ -81,6 +81,8 @@ class FinetuneTask:
         Main entrypoint for the finetuning task.
         """
         print(f"Running FinetuneTask: {self.config.name}")
+
+        self.prompts = cfg.prompts
 
         if self.config.gpu_ids:
             os.environ["CUDA_VISIBLE_DEVICES"] = self.config.gpu_ids
