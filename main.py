@@ -6,6 +6,8 @@ from omegaconf import DictConfig, OmegaConf
 from src.config_schemas import Config
 import src.tasks
 import src.models.loaders
+import src.eval.metrics.loaders
+
 
 cs = ConfigStore.instance()
 cs.store(name="base_config", node=Config)
