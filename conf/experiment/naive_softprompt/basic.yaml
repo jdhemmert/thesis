@@ -17,7 +17,11 @@ hydra:
 task:
     num_train_epochs: 1
     trainable_strategy: "soft_prompt_only"
+
     extrinsic_validation:
         frequency: END
-        sample_count: 100
-        log_predictions: yes
+        metric_type: evaluate
+        metric_config:
+            metric_name: rouge
+            sample_count: 100
+            log_predictions: yes
