@@ -9,28 +9,31 @@ from typing import Dict, List, Any
 from .base import BaseMetric
 
 @dataclass
-class RougeMetricConfig:
-    """Configuration for the RougeMetric."""
+class EvaluateMetricConfig:
+    """Configuration for the EvaluateMetric."""
+    metric_name: str = "rouge"
     sample_count: int = 10
     log_predictions: bool = False
 
-class RougeMetric(BaseMetric):
+class EvaluateMetric(BaseMetric):
     """
-    A class to encapsulate ROUGE metric computation, including pre and post processing.
+    A class to encapsulate evaluation metric computation using the 'evaluate' library,
+    including pre and post processing for prediction generation.
     The input_ids and attention_masks are precomputed during initialization.
     """
-    def __init__(self, config: RougeMetricConfig, tokenizer, eval_dataset: Any, output_dir: str):
+    def __init__(self, config: EvaluateMetricConfig, tokenizer, eval_dataset: Any, output_dir: str):
         super().__init__(config, tokenizer, eval_dataset, output_dir)
         
+        self.metric_evaluator = evaluate.load(self.config.metric_name)
         self.precomputed_data = self._preprocess_eval_dataset(eval_dataset)
-        print(f"RougeMetric initialized with {len(self.precomputed_data['input_ids'])} precomputed examples.")
+        print(f"EvaluateMetric({self.config.metric_name}) initialized with {len(self.precomputed_data['input_ids'])} precomputed examples.")
 
     def _preprocess_eval_dataset(self, eval_dataset: Any) -> Dict[str, List[Any]]:
         """
         Preprocesses the evaluation dataset to extract and store necessary columns.
         This includes tokenizing, extracting answers, and questions.
         """
-        print("Preprocessing evaluation dataset for RougeMetric...")
+        print(f"Preprocessing evaluation dataset for EvaluateMetric({self.config.metric_name})...")
         required_cols = ["memory_input_ids", "memory_attention_mask", "answer", "question"]
         if not all(col in eval_dataset.column_names for col in required_cols):
             raise ValueError(f"Required columns {required_cols} not found in dataset: {eval_dataset.column_names}.")
@@ -62,13 +65,13 @@ class RougeMetric(BaseMetric):
 
     def compute_and_log_scores(self, model, state, metrics: Dict):
         """
-        Generates predictions, computes ROUGE scores, and logs predictions if configured.
+        Generates predictions, computes metric scores, and logs predictions if configured.
         """
         if model is None or self.tokenizer is None:
-            print("Skipping ROUGE evaluation: model or tokenizer not available.")
+            print(f"Skipping EvaluateMetric({self.config.metric_name}) evaluation: model or tokenizer not available.")
             return
 
-        print("\nPerforming ROUGE Evaluation...")
+        print(f"\nPerforming EvaluateMetric({self.config.metric_name}) Evaluation...")
         all_preds = []
         all_labels = []
         all_questions_for_log = []
@@ -95,13 +98,12 @@ class RougeMetric(BaseMetric):
             all_labels.append(self.precomputed_data["answer"][i])
             all_questions_for_log.append(self.precomputed_data["question"][i])
 
-        rouge_metric_evaluator = evaluate.load('rouge')
-        rouge_scores = rouge_metric_evaluator.compute(predictions=all_preds, references=all_labels)
+        metric_scores = self.metric_evaluator.compute(predictions=all_preds, references=all_labels)
 
-        for key, value in rouge_scores.items():
+        for key, value in metric_scores.items():
             metrics[f"eval_{key}"] = value
 
-        print(f"Extrinsic ROUGE Scores: {rouge_scores}")
+        print(f"Extrinsic EvaluateMetric({self.config.metric_name}) Scores: {metric_scores}")
 
         if state.is_world_process_zero and self.config.log_predictions:
             log_file_path = os.path.join(self.output_dir, f"prediction_log.epoch_{int(state.epoch)}.jsonl")

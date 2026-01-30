@@ -8,7 +8,7 @@ import torch
 from transformers import TrainerCallback
 from omegaconf import DictConfig, OmegaConf
 
-from src.eval.metrics.rouge import RougeMetric, RougeMetricConfig
+from src.eval.metrics.evaluate_metric import EvaluateMetric, EvaluateMetricConfig
 from src.eval.metrics.base import MetricFactory, BaseMetric
 
 class ExtrinsicValidationFrequency(Enum):
@@ -19,8 +19,8 @@ class ExtrinsicValidationFrequency(Enum):
 @dataclass
 class ExtrinsicValidationConfig:
     frequency: ExtrinsicValidationFrequency = ExtrinsicValidationFrequency.NEVER
-    metric_type: str = "rouge"
-    metric_config: DictConfig = field(default_factory=lambda: OmegaConf.structured(RougeMetricConfig()))
+    metric_type: str = "evaluate"
+    metric_config: DictConfig = field(default_factory=lambda: OmegaConf.structured(EvaluateMetricConfig()))
 
 class ExtrinsicValidationCallback(TrainerCallback):
     
@@ -50,5 +50,4 @@ class ExtrinsicValidationCallback(TrainerCallback):
         metrics = kwargs.get("metrics", {})
 
         self.metric.compute_and_log_scores(model, state, metrics)
-
 
