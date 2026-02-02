@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Type, Optional
+from typing import Dict, Type, Optional, List
 import torch
 from transformers import PreTrainedTokenizer, PreTrainedModel, LlamaModel
 
@@ -62,4 +62,47 @@ class TextInitializer(PromptInitializer):
             initial_weights += noise
         
         return initial_weights
+
+@InitializerFactory.register("windowed_average")
+class WindowedAverageInitializer(PromptInitializer):
+    """
+    Initializes the virtual prompt by creating windowed averages of the context text embeddings.
+    """
+    def initialize(self, model: LlamaModel, tokenizer: PreTrainedTokenizer, context_text: str, virtual_token_count: int, **kwargs) -> torch.Tensor:
+        if not context_text:
+            raise ValueError("Context text cannot be empty for WindowedAverageInitializer.")
+        if virtual_token_count <= 0:
+            raise ValueError("virtual_token_count must be greater than 0.")
+
+        token_ids = tokenizer(context_text, return_tensors="pt").input_ids
+        
+        with torch.no_grad():
+            embedding_layer = model.get_input_embeddings()
+            context_embeddings = embedding_layer(token_ids.to(model.device)).squeeze(0) # Shape: (N, hidden_size)
+
+        N = context_embeddings.shape[0] # Number of context tokens
+
+        if N < virtual_token_count:
+            raise ValueError(
+                f"Number of context tokens ({N}) is less than virtual_token_count ({virtual_token_count}). "
+                "Cannot perform windowed averaging."
+            )
+        
+        averaged_embeddings: List[torch.Tensor] = []
+        current_idx = 0
+
+        base_size = N // virtual_token_count
+        remainder = N % virtual_token_count
+
+        for i in range(virtual_token_count):
+            window_size = base_size + (1 if i < remainder else 0)
+            
+            if window_size == 0: # Should not happen if N >= virtual_token_count
+                raise ValueError("Calculated window size is zero, unexpected error in windowing logic.")
+
+            window_embeddings = context_embeddings[current_idx : current_idx + window_size]
+            averaged_embeddings.append(torch.mean(window_embeddings, dim=0))
+            current_idx += window_size
+        
+        return torch.stack(averaged_embeddings)
 
