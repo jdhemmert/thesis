@@ -15,6 +15,7 @@ class AugmentedLlamaConfig(LlamaConfig):
         self,
         virtual_token_count=20,
         insert_layer=0,
+        initialization_method: Optional[str] = None,
         initialization_context_text=None,
         initialization_noise_level=0.0,
         **kwargs
@@ -22,6 +23,7 @@ class AugmentedLlamaConfig(LlamaConfig):
         super().__init__(**kwargs)
         self.virtual_token_count = virtual_token_count
         self.insert_layer = insert_layer
+        self.initialization_method = initialization_method
         self.initialization_context_text = initialization_context_text
         self.initialization_noise_level = initialization_noise_level
 
@@ -34,11 +36,15 @@ class AugmentedLlamaModel(LlamaModel):
         self.virtual_prompt = None
         self.rebuild_virtual_prompt(virtual_token_count)
 
-    def rebuild_virtual_prompt(self, new_virtual_token_count: Optional[int] = None):
+    def rebuild_virtual_prompt(self, new_virtual_token_count: Optional[int] = None, weights: Optional[torch.Tensor] = None):
         """
         Creates or replaces the virtual prompt embedding layer.
-        If new_virtual_token_count is not provided, uses the current self.virtual_token_count.
+        If new_virtual_token_count is not provided, it's inferred from the weights.
+        If weights are provided, they are used to initialize the embedding layer.
         """
+        if weights is not None:
+            new_virtual_token_count = weights.shape[0]
+
         if new_virtual_token_count is not None:
             self.virtual_token_count = new_virtual_token_count
         
@@ -46,30 +52,17 @@ class AugmentedLlamaModel(LlamaModel):
             self.virtual_token_count = 0
 
         if self.virtual_token_count > 0:
-            # Inherit dtype and device from the main model's embedding layer
             dtype = self.embed_tokens.weight.dtype
             device = self.embed_tokens.weight.device
             self.virtual_prompt = nn.Embedding(
                 self.virtual_token_count, self.config.hidden_size, dtype=dtype
             ).to(device)
+            
+            if weights is not None:
+                with torch.no_grad():
+                    self.virtual_prompt.weight.data.copy_(weights)
         else:
             self.virtual_prompt = None
-
-    def set_virtual_prompt_weights(self, weights: torch.Tensor):
-        """
-        Initializes the virtual prompt's weights from a given tensor.
-        """
-        if self.virtual_prompt is None:
-            raise ValueError("Cannot set weights when virtual_prompt is not initialized.")
-        
-        if weights.shape != self.virtual_prompt.weight.shape:
-            raise ValueError(
-                f"Shape mismatch. Provided weights have shape {weights.shape}, "
-                f"but the virtual prompt has shape {self.virtual_prompt.weight.shape}."
-            )
-        
-        with torch.no_grad():
-            self.virtual_prompt.weight.data.copy_(weights)
 
     def forward(
         self,
@@ -174,3 +167,4 @@ class AugmentedLlamaForCausalLM(LlamaForCausalLM):
             return_dict=return_dict,
             cache_position=cache_position,
         )
+

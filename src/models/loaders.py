@@ -5,6 +5,7 @@ from transformers import AutoModelForCausalLM, PreTrainedModel, PreTrainedTokeni
 
 from src.models.base import BaseModelLoader, ModelFactory
 from src.models.augmented_llama import AugmentedLlamaForCausalLM, AugmentedLlamaConfig
+from src.models.prompt_initializers import InitializerFactory
 
 
 @ModelFactory.register("standard")
@@ -52,33 +53,39 @@ class AugmentedLlamaLoader(BaseModelLoader):
 
     def _post_process_model(self, model: PreTrainedModel, tokenizer: PreTrainedTokenizer) -> PreTrainedModel:
         """
-        Initializes the soft prompt for AugmentedLlamaForCausalLM if configured.
+        Initializes the soft prompt for AugmentedLlamaForCausalLM using the configured method.
         """
         if not isinstance(model, AugmentedLlamaForCausalLM):
             raise TypeError("Model must be AugmentedLlamaForCausalLM for soft prompt initialization.")
 
-        if self.model_config.initialization_context_text:
-            print("Performing soft prompt initialization...")
-            context_text = self.model_config.initialization_context_text
-            noise_level = self.model_config.initialization_noise_level
+        # Ensure the model config is the correct type
+        if not isinstance(self.model_config, AugmentedLlamaConfig):
+            raise TypeError("model_config must be an instance of AugmentedLlamaConfig.")
 
-            context_ids = tokenizer(context_text, return_tensors="pt").input_ids
-            virtual_token_count = context_ids.shape[1]
+        # Check if an initialization method is specified
+        init_method = getattr(self.model_config, "initialization_method", None)
+        if not init_method:
+            return model # No initialization requested
 
-            if not hasattr(model, 'model') or not hasattr(model.model, 'rebuild_virtual_prompt'):
-                raise TypeError("The provided model is not a compatible AugmentedLlamaForCausalLM instance.")
-            
-            model.model.rebuild_virtual_prompt(virtual_token_count)
-
-            with torch.no_grad():
-                embed_tokens_layer = model.model.embed_tokens if hasattr(model, 'model') else model.embed_tokens
-                initial_weights = embed_tokens_layer(context_ids.to(model.device)).squeeze(0)
-
-            if noise_level > 0.0:
-                noise = torch.randn_like(initial_weights) * noise_level
-                initial_weights += noise
-                print(f"Applied Gaussian noise with std_dev={noise_level} to initial soft prompt.")
-
-            model.model.set_virtual_prompt_weights(initial_weights)
-            print(f"Initialized soft prompt with {virtual_token_count} tokens from context.")
+        print(f"Performing soft prompt initialization with method: '{init_method}'...")
+        
+        initializer = InitializerFactory.create(init_method)
+        
+        # Prepare arguments for the initializer
+        init_kwargs = {
+            "model": model.model, # Pass the underlying LlamaModel
+            "tokenizer": tokenizer,
+            "virtual_token_count": self.model_config.virtual_token_count,
+            "context_text": getattr(self.model_config, "initialization_context_text", None),
+            "noise_level": getattr(self.model_config, "initialization_noise_level", 0.0),
+        }
+        
+        # Generate the initial weights
+        initial_weights = initializer.initialize(**init_kwargs)
+        
+        # Rebuild the virtual prompt with the new weights
+        model.model.rebuild_virtual_prompt(weights=initial_weights)
+        
+        print(f"Initialized soft prompt with {model.model.virtual_token_count} tokens.")
+        
         return model
