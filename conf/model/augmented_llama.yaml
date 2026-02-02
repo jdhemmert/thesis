@@ -7,4 +7,4 @@ architecture: augmented-llama
 model_config:
   _target_: src.models.augmented_llama.AugmentedLlamaConfig
   virtual_token_count: 20
-  initialization_method: "random"
+  initialization_method: RANDOM

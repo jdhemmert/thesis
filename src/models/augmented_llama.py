@@ -6,6 +6,8 @@ from transformers.modeling_outputs import BaseModelOutputWithPast
 from transformers.models.llama.modeling_llama import LlamaAttention
 from dataclasses import dataclass, field
 
+from src.models.prompt_initializers import PromptInitializerName
+
 
 class AugmentedLlamaConfig(LlamaConfig):
     """
@@ -15,7 +17,7 @@ class AugmentedLlamaConfig(LlamaConfig):
         self,
         virtual_token_count=20,
         insert_layer=0,
-        initialization_method: Optional[str] = None,
+        initialization_method,
         initialization_context_text=None,
         initialization_noise_level=0.0,
         **kwargs

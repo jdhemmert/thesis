@@ -1,8 +1,17 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Type, Optional, List
+from enum import Enum
 import torch
 from transformers import PreTrainedTokenizer, PreTrainedModel, LlamaModel
 
+
+class PromptInitializerName(str, Enum):
+    """
+    Enum for names of available prompt initializers.
+    """
+    RANDOM = "random"
+    TEXT = "text"
+    WINDOWED_AVERAGE = "windowed_average"
 
 class PromptInitializer(ABC):
     """
@@ -16,23 +25,23 @@ class PromptInitializer(ABC):
         pass
 
 class InitializerFactory:
-    _initializers: Dict[str, Type[PromptInitializer]] = {}
+    _initializers: Dict[PromptInitializerName, Type[PromptInitializer]] = {}
 
     @classmethod
-    def register(cls, name: str):
+    def register(cls, name: PromptInitializerName):
         def wrapper(initializer_cls: Type[PromptInitializer]):
             cls._initializers[name] = initializer_cls
             return initializer_cls
         return wrapper
 
     @classmethod
-    def create(cls, name: str) -> PromptInitializer:
+    def create(cls, name: PromptInitializerName) -> PromptInitializer:
         initializer_cls = cls._initializers.get(name)
         if not initializer_cls:
             raise ValueError(f"Unknown initializer: {name}")
         return initializer_cls()
 
-@InitializerFactory.register("random")
+@InitializerFactory.register(PromptInitializerName.RANDOM)
 class RandomInitializer(PromptInitializer):
     """
     Initializes the virtual prompt with random noise.
@@ -41,7 +50,7 @@ class RandomInitializer(PromptInitializer):
         hidden_size = model.config.hidden_size
         return torch.randn(virtual_token_count, hidden_size) * noise_level
 
-@InitializerFactory.register("text")
+@InitializerFactory.register(PromptInitializerName.TEXT)
 class TextInitializer(PromptInitializer):
     """
     Initializes the virtual prompt from a piece of text.
@@ -63,7 +72,7 @@ class TextInitializer(PromptInitializer):
         
         return initial_weights
 
-@InitializerFactory.register("windowed_average")
+@InitializerFactory.register(PromptInitializerName.WINDOWED_AVERAGE)
 class WindowedAverageInitializer(PromptInitializer):
     """
     Initializes the virtual prompt by creating windowed averages of the context text embeddings.
