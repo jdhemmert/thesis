@@ -5,6 +5,7 @@ from omegaconf import MISSING
 from peft import PeftConfig
 
 from src.tasks.base import BaseTaskConfig
+from src.models.loaders import ModelArchitecture
 
 @dataclass
 class DatasetConfig:
@@ -17,7 +18,7 @@ class DatasetConfig:
 @dataclass
 class ModelConfigGroup:
     """A container for the base model config and an optional adapter config."""
-    architecture: str = MISSING
+    architecture: ModelArchitecture = MISSING
     model_config: Optional[Any] = field(default=MISSING)
     adapter_config: Optional[PeftConfig] = field(default=None)
     precision: str = field(default="bf16")

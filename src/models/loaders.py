@@ -1,5 +1,6 @@
 import torch
 from typing import Tuple
+from enum import Enum
 
 from transformers import AutoModelForCausalLM, PreTrainedModel, PreTrainedTokenizer, LlamaConfig
 
@@ -8,7 +9,13 @@ from src.models.augmented_llama import AugmentedLlamaForCausalLM, AugmentedLlama
 from src.models.prompt_initializers import InitializerFactory
 
 
-@ModelFactory.register("standard")
+class ModelArchitecture(str, Enum):
+    """Enum for names of available model architectures."""
+    STANDARD = "standard"
+    AUGMENTED_LLAMA = "augmented-llama"
+
+
+@ModelFactory.register(ModelArchitecture.STANDARD)
 class StandardLoader(BaseModelLoader):
     """
     Loader for standard Hugging Face AutoModelForCausalLM models.
@@ -28,7 +35,7 @@ class StandardLoader(BaseModelLoader):
         return self._load_base_model_from_pretrained(AutoModelForCausalLM, tokenizer)
 
 
-@ModelFactory.register("augmented-llama")
+@ModelFactory.register(ModelArchitecture.AUGMENTED_LLAMA)
 class AugmentedLlamaLoader(BaseModelLoader):
     """
     Loader for the custom AugmentedLlamaForCausalLM model.

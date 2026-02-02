@@ -7,23 +7,25 @@ from typing import Dict, Type, Optional, Tuple, Any
 from transformers import AutoTokenizer, AutoModelForCausalLM, PreTrainedModel, PreTrainedTokenizer, LlamaConfig
 from peft import get_peft_model, PeftConfig
 
+from src.models.loaders import ModelArchitecture
+
 
 class ModelFactory:
     """
     A factory for creating and loading models based on a specified architecture.
     Registers different model loaders and dispatches to the appropriate one.
     """
-    _model_loaders: Dict[str, Type["BaseModelLoader"]] = {}
+    _model_loaders: Dict[ModelArchitecture, Type["BaseModelLoader"]] = {}
 
     @classmethod
-    def register(cls, architecture_name: str):
+    def register(cls, architecture: ModelArchitecture):
         """
-        Decorator to register a BaseModelLoader subclass with a given architecture name.
+        Decorator to register a BaseModelLoader subclass with a given architecture.
         """
         def decorator(loader_class: Type["BaseModelLoader"]):
             if not issubclass(loader_class, BaseModelLoader):
                 raise TypeError(f"Registered class must inherit from BaseModelLoader, got {loader_class.__name__}")
-            cls._model_loaders[architecture_name] = loader_class
+            cls._model_loaders[architecture] = loader_class
             return loader_class
         return decorator
 
@@ -34,10 +36,13 @@ class ModelFactory:
         Dispatches to the specific loader registered for the given architecture.
         """
         architecture = cfg.model.architecture
+        if not isinstance(architecture, ModelArchitecture):
+             raise TypeError(f"Architecture must be a ModelArchitecture enum member, but got {type(architecture)}")
+
         loader_class = cls._model_loaders.get(architecture)
         if loader_class is None:
             raise ValueError(f"No model loader registered for architecture: '{architecture}'. "
-                             f"Available architectures: {list(cls._model_loaders.keys())}")
+                             f"Available architectures: {[arch.value for arch in cls._model_loaders.keys()]}")
         
         loader = loader_class(cfg)
         return loader.load()
