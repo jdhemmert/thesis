@@ -8,8 +8,9 @@ import torch
 from transformers import TrainerCallback
 from omegaconf import DictConfig, OmegaConf
 
-from src.eval.metrics.evaluate_metric import EvaluateMetric, EvaluateMetricConfig
+from src.eval.metrics.beaver import BeaverMetricConfig
 from src.eval.metrics.base import MetricFactory, BaseMetric
+
 
 class ExtrinsicValidationFrequency(Enum):
     ALWAYS = "always"
