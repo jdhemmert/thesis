@@ -189,8 +189,8 @@ class TrainMemoryTask:
         )
 
         callbacks = []
-        if self.config.extrinsic_validation != ExtrinsicValidationFrequency.NEVER:
-            callbacks.append(ExtrinsicValidationCallback(self.config.extrinsic_validation, tokenized_dataset, tokenizer, cwd))
+        if self.config.extrinsic_validation.frequency != ExtrinsicValidationFrequency.NEVER:
+            callbacks.append(ExtrinsicValidationCallback(self.config.extrinsic_validation, tokenized_dataset, tokenizer, cwd, self.prompts))
 
         trainer = MemoryBankTrainer(
             model=model,

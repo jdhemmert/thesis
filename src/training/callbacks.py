@@ -10,6 +10,7 @@ from omegaconf import DictConfig, OmegaConf
 
 from src.eval.metrics.beaver import BeaverMetricConfig
 from src.eval.metrics.base import MetricFactory, BaseMetric
+from src.config_schemas import PromptConfig
 
 
 class ExtrinsicValidationFrequency(Enum):
@@ -25,17 +26,19 @@ class ExtrinsicValidationConfig:
 
 class ExtrinsicValidationCallback(TrainerCallback):
     
-    def __init__(self, config: ExtrinsicValidationConfig, eval_dataset, tokenizer, output_dir):
+    def __init__(self, config: ExtrinsicValidationConfig, eval_dataset, tokenizer, output_dir, prompt_config: PromptConfig):
         self.config = config
         self.tokenizer = tokenizer
         self.output_dir = output_dir
+        self.prompt_config = prompt_config
 
         self.metric: BaseMetric = MetricFactory.load(
             metric_type=self.config.metric_type,
             metric_config=self.config.metric_config,
             tokenizer=tokenizer,
             eval_dataset=eval_dataset,
-            output_dir=output_dir
+            output_dir=output_dir,
+            prompt_config=self.prompt_config
         )
 
     def on_evaluate(self, args, state, control, **kwargs):
