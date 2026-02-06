@@ -158,9 +158,17 @@ class TrainMemoryTask:
 
         self.prompts = cfg.prompts
         
-        # Load model and tokenizer using the utility function
         model, tokenizer = ModelFactory.load(cfg)
         
+        # Explicitly initialize the soft prompt if the model supports it
+        if hasattr(model, 'initialize_virtual_prompt') and cfg.model.model_config.initialization_method:
+            print("Performing soft prompt initialization...")
+            model.initialize_virtual_prompt(
+                tokenizer=tokenizer,
+                method=cfg.model.model_config.initialization_method,
+                config=cfg.model.model_config.get("initializer_config")
+            )
+
         tokenized_dataset = self._load_data(tokenizer, cfg.dataset)
 
         # Freeze parameters if needed

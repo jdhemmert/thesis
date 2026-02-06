@@ -5,8 +5,9 @@ from transformers import LlamaModel, LlamaForCausalLM, LlamaConfig
 from transformers.modeling_outputs import BaseModelOutputWithPast
 from transformers.models.llama.modeling_llama import LlamaAttention
 from dataclasses import dataclass, field
+from omegaconf import DictConfig
 
-from src.models.prompt_initializers import PromptInitializerName
+from src.models.prompt_initializers import PromptInitializerName, InitializerFactory
 
 
 class AugmentedLlamaConfig(LlamaConfig):
@@ -17,9 +18,10 @@ class AugmentedLlamaConfig(LlamaConfig):
         self,
         virtual_token_count=20,
         insert_layer=0,
-        initialization_method,
+        initialization_method: Optional[PromptInitializerName] = None,
         initialization_context_text=None,
         initialization_noise_level=0.0,
+        initializer_config: Optional[DictConfig] = None,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -28,6 +30,7 @@ class AugmentedLlamaConfig(LlamaConfig):
         self.initialization_method = initialization_method
         self.initialization_context_text = initialization_context_text
         self.initialization_noise_level = initialization_noise_level
+        self.initializer_config = initializer_config
 
 class AugmentedLlamaModel(LlamaModel):
 
@@ -57,8 +60,7 @@ class AugmentedLlamaModel(LlamaModel):
             dtype = self.embed_tokens.weight.dtype
             device = self.embed_tokens.weight.device
             self.virtual_prompt = nn.Embedding(
-                self.virtual_token_count, self.config.hidden_size, dtype=dtype
-            ).to(device)
+                self.virtual_token_count, self.config.hidden_size, dtype=dtype).to(device)
             
             if weights is not None:
                 with torch.no_grad():
@@ -133,6 +135,30 @@ class AugmentedLlamaForCausalLM(LlamaForCausalLM):
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
 
         self.post_init()
+
+    def initialize_virtual_prompt(self, tokenizer: Any, method: PromptInitializerName, config: Optional[DictConfig] = None):
+        """
+        Initializes the virtual prompt using a specified method.
+        This method provides an explicit hook to initialize the soft prompt after the model is loaded.
+        """
+        print(f"Performing soft prompt initialization with method: '{method.value}'...")
+        
+        initializer = InitializerFactory.create(method)
+        
+        # Note: The 'config' parameter here is the nested 'initializer_config' from the main YAML
+        init_kwargs = {
+            "model": self.model,
+            "tokenizer": tokenizer,
+            "virtual_token_count": self.config.virtual_token_count,
+            "context_text": self.config.initialization_context_text,
+            "noise_level": self.config.initialization_noise_level,
+            "initializer_config": config
+        }
+        
+        initial_weights = initializer.initialize(**init_kwargs)
+        self.model.rebuild_virtual_prompt(weights=initial_weights)
+        
+        print(f"Initialized soft prompt with {self.model.virtual_token_count} tokens.")
 
     def forward(
         self,
