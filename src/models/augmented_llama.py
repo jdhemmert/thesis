@@ -136,7 +136,7 @@ class AugmentedLlamaForCausalLM(LlamaForCausalLM):
 
         self.post_init()
 
-    def initialize_virtual_prompt(self, tokenizer: Any, method: PromptInitializerName, config: Optional[DictConfig] = None):
+    def initialize_virtual_prompt(self, tokenizer: Any, method: PromptInitializerName, config: Optional[DictConfig] = None, dataset_path: Optional[str] = None):
         """
         Initializes the virtual prompt using a specified method.
         This method provides an explicit hook to initialize the soft prompt after the model is loaded.
@@ -145,14 +145,14 @@ class AugmentedLlamaForCausalLM(LlamaForCausalLM):
         
         initializer = InitializerFactory.create(method)
         
-        # Note: The 'config' parameter here is the nested 'initializer_config' from the main YAML
         init_kwargs = {
             "model": self.model,
             "tokenizer": tokenizer,
             "virtual_token_count": self.config.virtual_token_count,
             "context_text": self.config.initialization_context_text,
             "noise_level": self.config.initialization_noise_level,
-            "initializer_config": config
+            "initializer_config": config,
+            "dataset_path": dataset_path
         }
         
         initial_weights = initializer.initialize(**init_kwargs)

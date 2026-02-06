@@ -166,7 +166,8 @@ class TrainMemoryTask:
             model.initialize_virtual_prompt(
                 tokenizer=tokenizer,
                 method=cfg.model.model_config.initialization_method,
-                config=cfg.model.model_config.get("initializer_config")
+                config=cfg.model.model_config.get("initializer_config"),
+                dataset_path=cfg.dataset.path
             )
 
         tokenized_dataset = self._load_data(tokenizer, cfg.dataset)
