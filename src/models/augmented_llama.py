@@ -7,7 +7,7 @@ from transformers.models.llama.modeling_llama import LlamaAttention
 from dataclasses import dataclass, field
 from omegaconf import DictConfig
 
-from src.models.prompt_initializers import PromptInitializerName, InitializerFactory
+from src.models.prompt_initializers import PromptInitializerName, INITIALIZER_MAP
 
 
 class AugmentedLlamaConfig(LlamaConfig):
@@ -139,20 +139,20 @@ class AugmentedLlamaForCausalLM(LlamaForCausalLM):
     def initialize_virtual_prompt(self, tokenizer: Any, method: PromptInitializerName, config: Optional[DictConfig] = None, dataset_path: Optional[str] = None):
         """
         Initializes the virtual prompt using a specified method.
-        This method provides an explicit hook to initialize the soft prompt after the model is loaded.
         """
         print(f"Performing soft prompt initialization with method: '{method.value}'...")
         
-        initializer = InitializerFactory.create(method)
+        initializer_class = INITIALIZER_MAP.get(method.value)
+        if not initializer_class:
+            raise ValueError(f"Unknown initializer: {method.value}")
+        
+        initializer = initializer_class(config)
         
         init_kwargs = {
-            "model": self.model,
-            "tokenizer": tokenizer,
+            "main_model": self.model,
+            "main_tokenizer": tokenizer,
             "virtual_token_count": self.config.virtual_token_count,
-            "context_text": self.config.initialization_context_text,
-            "noise_level": self.config.initialization_noise_level,
-            "initializer_config": config,
-            "dataset_path": dataset_path
+            "dataset_path": dataset_path,
         }
         
         initial_weights = initializer.initialize(**init_kwargs)
