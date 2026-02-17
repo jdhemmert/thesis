@@ -22,6 +22,7 @@ dependencies = [
     "nltk",
     "absl-py",
     "rouge-score",
+    "bert-score>=0.3.13",
 ]
 
 [build-system]
