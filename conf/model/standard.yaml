@@ -1,4 +1,4 @@
-architecture: standard
+architecture: STANDARD
 precision: bf16
 adapter_config: null
 
