@@ -4,7 +4,7 @@ from transformers import LlamaModel, PreTrainedTokenizer
 
 from .dispatch import GENERATOR_MAP, POOLER_MAP
 
-class ComposablePromptInitializer:
+class ComposableInitializer:
     def __init__(self, config: DictConfig):
         self.config = config
 

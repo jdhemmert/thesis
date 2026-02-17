@@ -13,7 +13,7 @@ class TokenizerEmbeddingGeneratorConfig(BaseContextConfig):
 
 @dataclass
 class ExternalModelEmbeddingGeneratorConfig(BaseContextConfig):
-    embedding_model_name_or_path: str
+    embedding_model_name_or_path: str = "nvidia/llama-embed-nemotron-8b"
 
 
 class BaseEmbeddingGenerator(ABC):

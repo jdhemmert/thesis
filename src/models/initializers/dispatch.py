@@ -2,6 +2,7 @@ from .generators import BaseEmbeddingGenerator, TokenizerEmbeddingGenerator, Ext
 from .poolers import BaseEmbeddingPooler, WindowedAveragePooler, PadPooler, TruncatePooler, IdentityPooler
 from typing import Dict, Type
 
+
 GENERATOR_MAP: Dict[str, Type[BaseEmbeddingGenerator]] = {
     "tokenizer": TokenizerEmbeddingGenerator,
     "external_model": ExternalModelEmbeddingGenerator,

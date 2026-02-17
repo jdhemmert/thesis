@@ -1,17 +1,10 @@
 import torch
 from typing import Tuple
-from enum import Enum
 
 from transformers import AutoModelForCausalLM, PreTrainedModel, PreTrainedTokenizer, LlamaConfig
 
-from src.models.base import BaseModelLoader, ModelFactory
+from src.models.base import BaseModelLoader, ModelFactory, ModelArchitecture
 from src.models.augmented_llama import AugmentedLlamaForCausalLM, AugmentedLlamaConfig
-
-
-class ModelArchitecture(str, Enum):
-    """Enum for names of available model architectures."""
-    STANDARD = "standard"
-    AUGMENTED_LLAMA = "augmented-llama"
 
 
 @ModelFactory.register(ModelArchitecture.STANDARD)

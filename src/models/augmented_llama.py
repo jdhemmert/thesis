@@ -7,8 +7,6 @@ from transformers.models.llama.modeling_llama import LlamaAttention
 from dataclasses import dataclass, field
 from omegaconf import DictConfig
 
-from src.models.prompt_initializers import PromptInitializerName, INITIALIZER_MAP
-
 
 class AugmentedLlamaConfig(LlamaConfig):
     """
@@ -18,19 +16,11 @@ class AugmentedLlamaConfig(LlamaConfig):
         self,
         virtual_token_count=20,
         insert_layer=0,
-        initialization_method: Optional[PromptInitializerName] = None,
-        initialization_context_text=None,
-        initialization_noise_level=0.0,
-        initializer_config: Optional[DictConfig] = None,
         **kwargs
     ):
         super().__init__(**kwargs)
         self.virtual_token_count = virtual_token_count
         self.insert_layer = insert_layer
-        self.initialization_method = initialization_method
-        self.initialization_context_text = initialization_context_text
-        self.initialization_noise_level = initialization_noise_level
-        self.initializer_config = initializer_config
 
 class AugmentedLlamaModel(LlamaModel):
 
@@ -135,30 +125,6 @@ class AugmentedLlamaForCausalLM(LlamaForCausalLM):
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
 
         self.post_init()
-
-    def initialize_virtual_prompt(self, tokenizer: Any, method: PromptInitializerName, config: Optional[DictConfig] = None, dataset_path: Optional[str] = None):
-        """
-        Initializes the virtual prompt using a specified method.
-        """
-        print(f"Performing soft prompt initialization with method: '{method.value}'...")
-        
-        initializer_class = INITIALIZER_MAP.get(method.value)
-        if not initializer_class:
-            raise ValueError(f"Unknown initializer: {method.value}")
-        
-        initializer = initializer_class(config)
-        
-        init_kwargs = {
-            "main_model": self.model,
-            "main_tokenizer": tokenizer,
-            "virtual_token_count": self.config.virtual_token_count,
-            "dataset_path": dataset_path,
-        }
-        
-        initial_weights = initializer.initialize(**init_kwargs)
-        self.model.rebuild_virtual_prompt(weights=initial_weights)
-        
-        print(f"Initialized soft prompt with {self.model.virtual_token_count} tokens.")
 
     def forward(
         self,

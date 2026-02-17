@@ -3,11 +3,16 @@ import hydra
 from omegaconf import DictConfig
 import torch
 from typing import Dict, Type, Optional, Tuple, Any
+from enum import Enum
 
 from transformers import AutoTokenizer, AutoModelForCausalLM, PreTrainedModel, PreTrainedTokenizer, LlamaConfig
 from peft import get_peft_model, PeftConfig
 
-from src.models.loaders import ModelArchitecture
+
+class ModelArchitecture(str, Enum):
+    """Enum for names of available model architectures."""
+    STANDARD = "standard"
+    AUGMENTED_LLAMA = "augmented-llama"
 
 
 class ModelFactory:
