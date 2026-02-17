@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Dict, Type, Any
 from omegaconf import DictConfig
 
-from src.config_schemas import PromptConfig
 
 class MetricFactory:
     """
@@ -24,7 +24,7 @@ class MetricFactory:
         return decorator
 
     @classmethod
-    def load(cls, metric_type: str, metric_config: DictConfig, tokenizer: Any, eval_dataset: Any, output_dir: str, prompt_config: PromptConfig) -> "BaseMetric":
+    def load(cls, metric_type: str, metric_config: DictConfig, tokenizer: Any, eval_dataset: Any, output_dir: str, prompt_config) -> "BaseMetric":
         """
         Loads a metric instance based on the configuration.
         Dispatches to the specific loader registered for the given metric type.
@@ -36,6 +36,12 @@ class MetricFactory:
         
         loader = loader_class(metric_config, tokenizer, eval_dataset, output_dir, prompt_config)
         return loader.load()
+
+
+@dataclass
+class BaseMetricConfig:
+    _target_: str = "src.eval.metrics.base.BaseMetricConfig"
+
 
 class BaseMetric(ABC):
     """Abstract base class for all metric implementations."""
@@ -50,9 +56,10 @@ class BaseMetric(ABC):
         """Abstract method to compute and log metric scores."""
         pass
 
+
 class BaseMetricLoader(ABC):
     """Abstract base class for all metric loader implementations."""
-    def __init__(self(self, metric_config: DictConfig, tokenizer: Any, eval_dataset: Any, output_dir: str, prompt_config: PromptConfig):
+    def __init__(self, metric_config: DictConfig, tokenizer: Any, eval_dataset: Any, output_dir: str, prompt_config):
         self.metric_config = metric_config
         self.tokenizer = tokenizer
         self.eval_dataset = eval_dataset

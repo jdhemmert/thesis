@@ -1,9 +1,11 @@
+import os
+import math
+import json
+from typing import Dict, List, Any, Tuple
+from dataclasses import dataclass, field
+
 import torch
 import torch.nn.functional as F
-import os
-import json
-from dataclasses import dataclass, field
-from typing import Dict, List, Any, Tuple
 
 from omegaconf import DictConfig, OmegaConf
 from transformers import PreTrainedTokenizer, PreTrainedModel
@@ -22,9 +24,6 @@ class PerplexityMetricConfig:
     answer_key: str = "answer"
     max_length: int = 1024
     log_predictions: bool = True
-
-
-import math
 
 class PerplexityMetric(BaseMetric):
     """
@@ -108,7 +107,7 @@ class PerplexityMetric(BaseMetric):
         avg_loss = total_loss / total_examples if total_examples > 0 else float('nan')
         avg_perplexity = math.exp(avg_loss) if not math.isnan(avg_loss) else float('nan')
         
-        metrics[f"eval_perplexity"] = avg_perplexity
+        metrics["eval_perplexity"] = avg_perplexity
         print(f"\nAggregated PerplexityMetric Scores: Avg Perplexity={avg_perplexity:.4f}")
 
         if self.config.log_predictions:

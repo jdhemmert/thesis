@@ -1,0 +1,41 @@
+# @package _global_
+
+defaults:
+  - override /task:  train_memory
+  - override /model: augmented_llama
+  - override /task/extrinsic_validation: beaver
+  - _self_
+
+model:
+  model_config:
+    initialization_method: random
+    initialization_noise_level: 0.01
+    virtual_token_count: 20
+
+task:
+    num_train_epochs: 3
+    trainable_strategy: "soft_prompt_only"
+
+    extrinsic_validation:
+        metric_config:
+            trace: true
+            
+            budget: 500_000_000
+            max_sequence_length: 20
+            k_tokens: 20
+            sample_count: 5
+    
+            top_k_initial: 32
+            # top_k_max: 4096
+            # top_k_refine_factor: 2
+
+
+experiment_path: "beaver_test"
+# hydra:
+#     mode: MULTIRUN
+#     sweep:
+#         subdir: ${task.extrinsic_validation.metric_config.budget}b_${task.extrinsic_validation.metric_config.top_k_initial}ik
+#     sweeper:
+#         params:
+#             task.extrinsic_validation.metric_config.budget: 100_000_000 #, 500_000_000, 1_000_000_000, 5_000_000_000
+#             task.extrinsic_validation.metric_config.top_k_initial: 32 #, 64, 128, 256

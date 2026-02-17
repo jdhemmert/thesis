@@ -1,0 +1,20 @@
+# @package _global_
+
+defaults:
+  - override /task:  train_memory
+  - override /model: augmented_llama
+  - override /task/extrinsic_validation: bertscore
+  - _self_
+
+model:
+  model_config:
+    initialization_method: random
+    initialization_noise_level: 0.01
+    virtual_token_count: 20
+
+task:
+    num_train_epochs: 3
+    trainable_strategy: "soft_prompt_only"
+
+
+experiment_path: "bertscore_test"

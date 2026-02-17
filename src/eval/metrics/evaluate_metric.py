@@ -14,6 +14,7 @@ class EvaluateMetricConfig:
     metric_name: str = "rouge"
     sample_count: int = 10
     log_predictions: bool = False
+    extra_kwargs: dict = field(default_factory=lambda: { })
 
 class EvaluateMetric(BaseMetric):
     """
@@ -23,7 +24,7 @@ class EvaluateMetric(BaseMetric):
     """
     def __init__(self, config: EvaluateMetricConfig, tokenizer, eval_dataset: Any, output_dir: str):
         super().__init__(config, tokenizer, eval_dataset, output_dir)
-        
+
         self.metric_evaluator = evaluate.load(self.config.metric_name)
         self.precomputed_data = self._preprocess_eval_dataset(eval_dataset)
         print(f"EvaluateMetric({self.config.metric_name}) initialized with {len(self.precomputed_data['input_ids'])} precomputed examples.")
@@ -98,7 +99,7 @@ class EvaluateMetric(BaseMetric):
             all_labels.append(self.precomputed_data["answer"][i])
             all_questions_for_log.append(self.precomputed_data["question"][i])
 
-        metric_scores = self.metric_evaluator.compute(predictions=all_preds, references=all_labels)
+        metric_scores = self.metric_evaluator.compute(predictions=all_preds, references=all_labels, **self.config.extra_kwargs)
 
         for key, value in metric_scores.items():
             metrics[f"eval_{key}"] = value

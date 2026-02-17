@@ -1,0 +1,11 @@
+frequency: END
+metric_type: beaver
+metric_config:
+    _target_: src.eval.metrics.beaver.BeaverMetricConfig
+    budget: 100_000_000
+    max_sequence_length: 10
+    k_tokens: 10
+    sample_count: 1
+    top_k_initial: 128
+    top_k_max: 4096
+    top_k_refine_factor: 2

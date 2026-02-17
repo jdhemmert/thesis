@@ -1,0 +1,11 @@
+frequency: END
+metric_type: perplexity
+metric_config:
+    _target_: src.eval.metrics.perplexity.PerplexityMetricConfig
+    batch_size: 8
+    prompt_format_key: "contextual_qa_training"
+    context_key: "biography"
+    question_key: "question"
+    answer_key: "answer"
+    max_length: 1024
+    log_predictions: False

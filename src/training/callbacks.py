@@ -1,6 +1,7 @@
 import os
 import json
 
+from typing import Any, Optional
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -10,7 +11,6 @@ from omegaconf import DictConfig, OmegaConf
 
 from src.eval.metrics.beaver import BeaverMetricConfig
 from src.eval.metrics.base import MetricFactory, BaseMetric
-from src.config_schemas import PromptConfig
 
 
 class ExtrinsicValidationFrequency(Enum):
@@ -18,15 +18,17 @@ class ExtrinsicValidationFrequency(Enum):
     NEVER  = "never"
     END    = "end"
 
+
 @dataclass
 class ExtrinsicValidationConfig:
     frequency: ExtrinsicValidationFrequency = ExtrinsicValidationFrequency.NEVER
     metric_type: str = "evaluate"
-    metric_config: DictConfig = field(default_factory=lambda: OmegaConf.structured(EvaluateMetricConfig()))
+    metric_config: Optional[Any] = None
+
 
 class ExtrinsicValidationCallback(TrainerCallback):
     
-    def __init__(self, config: ExtrinsicValidationConfig, eval_dataset, tokenizer, output_dir, prompt_config: PromptConfig):
+    def __init__(self, config: ExtrinsicValidationConfig, eval_dataset, tokenizer, output_dir, prompt_config):
         self.config = config
         self.tokenizer = tokenizer
         self.output_dir = output_dir

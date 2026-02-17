@@ -1,0 +1,7 @@
+frequency: END
+metric_type: evaluate
+metric_config:
+    _target_: src.eval.metrics.evaluate_metric.EvaluateMetricConfig
+    metric_name: rouge
+    log_predictions: True
+    sample_count: 10
