@@ -1,6 +1,100 @@
 import torch
+import torch.nn.functional as F
 
-def self_distillation_loss(
+
+def _answer_pred_slice(logits, prompt_len, attn_mask):
+    """
+    Returns the slice of logits positions that predict answer tokens.
+
+    For CausalLM:
+      token at position j is predicted by logits at position j-1.
+    If answer starts at token index prompt_len, then predictions start at (prompt_len-1).
+
+    logits: [seq, vocab]
+    prompt_len: int
+    attn_mask: [seq] with 1 for real tokens
+    """
+    seq = logits.size(0)
+    # last real token index = attn_mask.sum()-1
+    real_len = int(attn_mask.sum().item())
+    # Answer token indices are [prompt_len, real_len-1]
+    # Prediction positions for those tokens are [prompt_len-1, real_len-2]
+    start = max(prompt_len - 1, 0)
+    end = max(real_len - 1, 0)  # exclusive for logits positions predicting up to token real_len-1 -> logits real_len-2
+    # prediction positions are [start, end) where end = real_len-1
+    # because logits index real_len-2 is last predictor
+    return logits[start:end, :]
+
+
+def _count_answer_tokens(prompt_len, attn_mask):
+    real_len = int(attn_mask.sum().item())
+    return max(real_len - prompt_len, 0)
+
+
+# TODO: rename
+def teacher_only_distill_loss(
+    teacher_logits, student_logits,
+    oracle_prompt_len, memory_prompt_len,
+    oracle_attention_mask, memory_attention_mask,
+    temperature: float,
+    use_gt_ce: bool = False,
+    memory_labels=None,  # answer-only labels for student stream if using GT CE
+    gt_ce_weight: float = 1.0,
+):
+    """
+    teacher_logits/student_logits: [bs, seq, vocab]
+    prompt_len tensors: [bs]
+    attention_masks: [bs, seq]
+    memory_labels: [bs, seq] with -100 for non-answer, required if use_gt_ce
+    """
+    bs, seq, vocab = student_logits.shape
+    T = float(temperature)
+
+    total_kl = student_logits.new_tensor(0.0)
+    total_tok = student_logits.new_tensor(0.0)
+
+    # KL aligned by answer index
+    for i in range(bs):
+        t_slice = _answer_pred_slice(
+            teacher_logits[i], int(oracle_prompt_len[i].item()), oracle_attention_mask[i]
+        )
+        s_slice = _answer_pred_slice(
+            student_logits[i], int(memory_prompt_len[i].item()), memory_attention_mask[i]
+        )
+
+        L = min(t_slice.size(0), s_slice.size(0))
+        if L <= 0:
+            continue
+
+        t_logp = F.log_softmax(t_slice[:L, :] / T, dim=-1)
+        s_logp = F.log_softmax(s_slice[:L, :] / T, dim=-1)
+        t_p = t_logp.exp()
+
+        # KL per token: sum_v pT (log pT - log pS)
+        kl_tok = (t_p * (t_logp - s_logp)).sum(dim=-1)  # [L]
+        total_kl = total_kl + kl_tok.sum() * (T * T)
+        total_tok = total_tok + L
+
+    loss = total_kl / torch.clamp(total_tok, min=1.0)
+
+    # Optional: ground-truth CE on student (answer-only)
+    if use_gt_ce:
+        assert memory_labels is not None, "memory_labels required when use_gt_ce=True"
+        # standard CausalLM CE over answer-only labels
+        shift_logits = student_logits[:, :-1, :].contiguous()
+        shift_labels = memory_labels[:, 1:].contiguous()
+        ce = F.cross_entropy(
+            shift_logits.view(-1, vocab),
+            shift_labels.view(-1),
+            ignore_index=-100,
+            reduction="mean",
+        )
+        loss = loss + gt_ce_weight * ce
+
+    return loss
+
+
+def __self_distillation_loss(
     oracle_logits: torch.Tensor,
     memory_logits: torch.Tensor,
     temperature: float,

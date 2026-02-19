@@ -23,12 +23,12 @@ class ModelConfigGroup:
     adapter_config: Optional[PeftConfig] = field(default=None)
     precision: str = field(default="bf16")
 
-
 @dataclass
 class PromptConfig:
-    contextual_qa_training: str = "Biography: {biography}\nQuestion: {question}\nAnswer: {answer}"
-    contextual_qa_generation: str = "Biography: {biography}\nQuestion: {question}\nAnswer:"
-    direct_qa_generation: str = "Question: {question}\nAnswer:"
+    contextual_qa_training: str   = "Biography: {biography}\nQuestion: {question}\nAnswer: {answer}"
+    contextual_qa_generation: str = "Biography: {biography}\nQuestion: {question}\nAnswer: "
+    direct_qa_training: str       = "Question: {question}\nAnswer: {answer}"
+    direct_qa_generation: str     = "Question: {question}\nAnswer: "
 
 
 @dataclass
