@@ -70,6 +70,7 @@ class AugmentedLlamaModel(LlamaModel):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
         virtual_tokens: Optional[torch.FloatTensor] = None,
+        use_virtual_tokens: Optional[bool] = None,
         **kwargs,
     ) -> BaseModelOutputWithPast | Tuple:
         if (input_ids is None) and (inputs_embeds is None):
@@ -78,26 +79,27 @@ class AugmentedLlamaModel(LlamaModel):
         if inputs_embeds is None:
             inputs_embeds = self.embed_tokens(input_ids)
 
-        # Prioritize passed virtual_tokens, fall back to stored tokens
-        final_virtual_tokens = None
-        if virtual_tokens is not None:
-            final_virtual_tokens = virtual_tokens
-        elif self.virtual_prompt is not None and self.virtual_token_count > 0:
-            batch_size = inputs_embeds.shape[0]
-            prompt_indices = torch.arange(self.virtual_token_count, device=inputs_embeds.device)
-            final_virtual_tokens = self.virtual_prompt(prompt_indices).unsqueeze(0).expand(batch_size, -1, -1)
-
-        # Only append virtual_tokens on the first pass
-        if final_virtual_tokens is not None and past_key_values is None:
-            inputs_embeds = torch.cat([final_virtual_tokens, inputs_embeds], dim=1)
-
-            if attention_mask is not None:
-                virtual_attention_mask = torch.ones(
-                    (attention_mask.shape[0], final_virtual_tokens.shape[1]),
-                    dtype=attention_mask.dtype,
-                    device=attention_mask.device
-                )
-                attention_mask = torch.cat([virtual_attention_mask, attention_mask], dim=1)
+        if use_virtual_tokens or (virtual_tokens is not None and use_virtual_tokens is not False):
+            # Prioritize passed virtual_tokens, fall back to stored tokens
+            final_virtual_tokens = None
+            if virtual_tokens is not None:
+                final_virtual_tokens = virtual_tokens
+            elif self.virtual_prompt is not None and self.virtual_token_count > 0:
+                batch_size = inputs_embeds.shape[0]
+                prompt_indices = torch.arange(self.virtual_token_count, device=inputs_embeds.device)
+                final_virtual_tokens = self.virtual_prompt(prompt_indices).unsqueeze(0).expand(batch_size, -1, -1)
+    
+            # Only append virtual_tokens on the first pass
+            if final_virtual_tokens is not None and past_key_values is None:
+                inputs_embeds = torch.cat([final_virtual_tokens, inputs_embeds], dim=1)
+    
+                if attention_mask is not None:
+                    virtual_attention_mask = torch.ones(
+                        (attention_mask.shape[0], final_virtual_tokens.shape[1]),
+                        dtype=attention_mask.dtype,
+                        device=attention_mask.device
+                    )
+                    attention_mask = torch.cat([virtual_attention_mask, attention_mask], dim=1)
 
         return super().forward(
             input_ids=None,
@@ -139,9 +141,10 @@ class AugmentedLlamaForCausalLM(LlamaForCausalLM):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
+        use_virtual_tokens: Optional[bool] = None,
         **kwargs,
     ):
-        if labels is not None and self.model.virtual_prompt is not None:
+        if labels is not None and self.model.virtual_prompt is not None and use_virtual_tokens is not False:
             virtual_token_count = self.model.virtual_token_count
             if virtual_token_count > 0:
                 batch_size = labels.shape[0]
@@ -160,5 +163,7 @@ class AugmentedLlamaForCausalLM(LlamaForCausalLM):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
             cache_position=cache_position,
+            use_virtual_tokens=use_virtual_tokens,
+            **kwargs
         )
 

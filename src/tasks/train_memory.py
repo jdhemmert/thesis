@@ -112,10 +112,12 @@ class MemoryBankTrainer(Trainer):
         oracle_out = model(
             input_ids=inputs["oracle_input_ids"],
             attention_mask=inputs["oracle_attention_mask"],
+            use_virtual_tokens=False,
         )
         student_out = model(
             input_ids=inputs["memory_input_ids"],
             attention_mask=inputs["memory_attention_mask"],
+            use_virtual_tokens=True,
         )
     
         loss = teacher_only_distill_loss(
@@ -170,10 +172,12 @@ class MemoryBankTrainer(Trainer):
             oracle_out = model(
                 input_ids=inputs["oracle_input_ids"],
                 attention_mask=inputs["oracle_attention_mask"],
+                use_virtual_tokens=False,
             )
             student_out = model(
                 input_ids=inputs["memory_input_ids"],
                 attention_mask=inputs["memory_attention_mask"],
+                use_virtual_tokens=True,
             )
     
             teacher_logits = oracle_out.logits   # [bs, seq, vocab]
