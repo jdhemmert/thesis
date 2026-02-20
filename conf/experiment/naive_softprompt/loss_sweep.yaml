@@ -1,0 +1,21 @@
+# @package _global_
+
+defaults:
+  - override /task:  train_memory
+  - override /model: augmented_llama
+  - _self_
+
+
+experiment_path: "naive_softprompt/loss_sweep_random_init"
+hydra:
+    mode: MULTIRUN
+    sweep:
+        subdir: ${task.alpha}alpha_${task.temperature}temp
+    sweeper:
+        params:
+            task.alpha: 0.1, 0.25, 0.5, 0.75, 1
+            task.temperature: 0.1, 0.25, 0.5, 0.75, 1
+
+task:
+    num_train_epochs: 20
+    trainable_strategy: soft_prompt_only

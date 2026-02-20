@@ -1,0 +1,36 @@
+# @package _global_
+
+defaults:
+  - override /task:  train_memory
+  - override /model: augmented_llama
+  - _self_
+
+
+experiment_path: "naive_softprompt/kl_saturation"
+hydra:
+    mode: MULTIRUN
+    sweep:
+        subdir: ${task.sample_n}samples${model.model_config.virtual_token_count}tokens
+    sweeper:
+        params:
+            task.sample_n: 50, 100, 500, 1000
+            model.model_config.virtual_token_count: 20, 50, 100, 500, 1000
+
+
+model:
+    model_config:
+        virtual_token_count: 100
+
+task:
+    sample_n: 500
+    
+    num_train_epochs: 100
+
+    learning_rate: 5e-2
+    lr_scheduler_type: constant
+    
+    trainable_strategy: "soft_prompt_only"
+
+    initialization_method: RANDOM
+    initialization_config:
+        initialization_noise_level: 0.01
