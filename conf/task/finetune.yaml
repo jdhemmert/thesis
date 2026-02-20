@@ -1,8 +1,0 @@
-# @package _global_
-# This file is referenced by experiment configs.
-# The defaults for the finetune task are defined in the
-# FinetuneTaskConfig dataclass in src/tasks/finetune.py.
-# You can override them here if needed for all finetune tasks.
-
-# Example of overriding a default:
-# learning_rate: 1e-5
