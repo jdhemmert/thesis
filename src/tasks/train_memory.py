@@ -193,13 +193,6 @@ class MemoryBankTrainer(Trainer):
                 t_prompt = int(inputs["oracle_prompt_len"][i].item())
                 s_prompt = int(inputs["memory_prompt_len"][i].item())
     
-                # Pre-alignment answer lengths (diagnostic)
-                t_ans_len = _answer_lens(t_prompt, inputs["oracle_attention_mask"][i])
-                s_ans_len = _answer_lens(s_prompt, inputs["memory_attention_mask"][i])
-    
-                stats[i, 4] = float(t_ans_len)
-                stats[i, 5] = float(s_ans_len)
-    
                 # Prediction slices corresponding to answer tokens
                 t_slice = _answer_pred_slice(teacher_logits[i], t_prompt, inputs["oracle_attention_mask"][i])  # [Lt, vocab]
                 s_slice = _answer_pred_slice(student_logits[i], s_prompt, inputs["memory_attention_mask"][i])  # [Ls, vocab]
@@ -216,7 +209,7 @@ class MemoryBankTrainer(Trainer):
                 teacher_sum_nll = F.cross_entropy(t_slice[:L, :], t_targets, reduction="sum")
                 student_sum_nll = F.cross_entropy(s_slice[:L, :], s_targets, reduction="sum")
     
-                # KL(teacher || student) over aligned answer predictions
+                # KL(teacher || student) over answer predictions
                 t_logp = F.log_softmax(t_slice[:L, :] / T, dim=-1)
                 s_logp = F.log_softmax(s_slice[:L, :] / T, dim=-1)
                 t_p = t_logp.exp()
@@ -248,41 +241,21 @@ class MemoryBankTrainer(Trainer):
         import math
         import numpy as np
     
-        stats = eval_pred.predictions  # numpy [N,6]
+        stats = eval_pred.predictions
     
         student_sum_nll = stats[:, 0]
         teacher_sum_nll = stats[:, 1]
         kl_sum          = stats[:, 2]
         L_used          = stats[:, 3]
-        oracle_ans_len  = stats[:, 4]
-        memory_ans_len  = stats[:, 5]
     
         total_tok = float(np.sum(L_used))
         n_examples = float(stats.shape[0])
-        n_examples_with_answer = float(np.sum(L_used > 0))
     
-        # CE/PPL over aligned answer tokens actually used
         student_ce = float(np.sum(student_sum_nll)) / max(total_tok, 1.0)
         teacher_ce = float(np.sum(teacher_sum_nll)) / max(total_tok, 1.0)
         kl_per_tok = float(np.sum(kl_sum)) / max(total_tok, 1.0)
     
-        # Diagnostics about answer lengths (pre-alignment)
-        frac_oracle_empty = float(np.mean(oracle_ans_len <= 0))
-        frac_memory_empty = float(np.mean(memory_ans_len <= 0))
-        frac_oracle_shorter = float(np.mean(oracle_ans_len < memory_ans_len))
-    
-        # Mean/min/max answer lengths over examples where L_used>0
-        if n_examples_with_answer > 0:
-            mean_answer_len = float(np.sum(L_used)) / n_examples_with_answer
-            min_answer_len = float(np.min(L_used[L_used > 0]))
-            max_answer_len = float(np.max(L_used[L_used > 0]))
-        else:
-            mean_answer_len = float("nan")
-            min_answer_len = float("nan")
-            max_answer_len = float("nan")
-    
         return {
-            # Core metrics
             "student_ce_answer": student_ce,
             "teacher_ce_answer": teacher_ce,
             "delta_ce_answer": student_ce - teacher_ce,
@@ -290,20 +263,7 @@ class MemoryBankTrainer(Trainer):
             "teacher_ppl_answer": math.exp(teacher_ce) if teacher_ce < 100 else float("inf"),
             "kl_per_token_answer": kl_per_tok,
             "n_answer_tokens": total_tok,
-    
-            # Token-count diagnosis
             "n_examples": n_examples,
-            "n_examples_with_answer": n_examples_with_answer,
-            "mean_answer_len_tokens": mean_answer_len,
-            "min_answer_len_tokens": min_answer_len,
-            "max_answer_len_tokens": max_answer_len,
-    
-            # Truncation / masking diagnosis
-            "oracle_answer_len_mean": float(np.mean(oracle_ans_len)),
-            "memory_answer_len_mean": float(np.mean(memory_ans_len)),
-            "frac_oracle_answer_empty": frac_oracle_empty,
-            "frac_memory_answer_empty": frac_memory_empty,
-            "frac_oracle_shorter_than_memory": frac_oracle_shorter,
         }
 
 
@@ -315,6 +275,7 @@ class TrainMemoryTaskConfig(BaseTaskConfig):
     _target_: str = "src.tasks.train_memory.TrainMemoryTask"
     name: str = "train_memory"
     learning_rate: float = 2e-4
+    lr_scheduler_type: str = "linear"
     num_train_epochs: int = 3
     precision: str = "bf16"
     seed: int = 42
@@ -351,20 +312,17 @@ class TrainMemoryTask:
         qs   = examples["question"]
         ans  = examples["answer"]
     
-        # Full sequences (include answer)
+        # Full sequences including answer
         oracle_texts = [
             self.prompts.contextual_qa_training.format(biography=b, question=q, answer=a)
             for b, q, a in zip(bios, qs, ans)
         ]
-    
-        # You must add this prompt to config:
-        # direct_qa_training: "Question: {question}\nAnswer: {answer}"
         memory_texts = [
             self.prompts.direct_qa_training.format(question=q, answer=a)
             for q, a in zip(qs, ans)
         ]
     
-        # Prefixes (no answer): used only to compute prompt lengths for masking/slicing
+        # Prefixes with no answer, used to compute prompt lengths for masking/slicing
         oracle_prefixes = [
             self.prompts.contextual_qa_generation.format(biography=b, question=q)
             for b, q in zip(bios, qs)
@@ -399,7 +357,7 @@ class TrainMemoryTask:
         if self.config.sample_n:
             if self.config.sample_strategy == 'random':
                 dataset = dataset.shuffle(seed=self.config.seed).select(range(self.config.sample_n))
-            else: # first_n
+            else:
                 dataset = dataset.select(range(self.config.sample_n))
 
         if self.config.extrinsic_validation.frequency != ExtrinsicValidationFrequency.NEVER:
@@ -413,67 +371,6 @@ class TrainMemoryTask:
             remove_columns=remove_columns
         )
         return tokenized_dataset
-
-    def _preprocess_logits_for_metrics(self, logits, labels):
-        """
-        For CausalLM: return per-example (sum_nll, n_tokens) so compute_metrics
-        can aggregate token-weighted loss and perplexity without storing logits.
-    
-        Returns: tensor [bs, 2] where [:,0]=sum_nll, [:,1]=n_tokens
-        """
-        if isinstance(logits, (tuple, list)):
-            logits = logits[0]  # [bs, seq, vocab]
-    
-        labels = labels.to(logits.device)
-    
-        # Ensure labels match logits seq length (pad with -100, don't truncate supervised positions)
-        bs, seq_logits, vocab = logits.shape
-        seq_labels = labels.shape[1]
-        if seq_labels < seq_logits:
-            pad = torch.full(
-                (bs, seq_logits - seq_labels),
-                -100,
-                dtype=labels.dtype,
-                device=labels.device,
-            )
-            labels = torch.cat([labels, pad], dim=1)
-        elif seq_labels > seq_logits:
-            labels = labels[:, :seq_logits]
-    
-        # Causal shift: predict token t+1 from position t
-        shift_logits = logits[:, :-1, :]   # [bs, seq-1, vocab]
-        shift_labels = labels[:, 1:]       # [bs, seq-1]
-    
-        # Per-token CE (no reduction), ignoring -100
-        per_tok_nll = F.cross_entropy(
-            shift_logits.reshape(-1, vocab),
-            shift_labels.reshape(-1),
-            ignore_index=-100,
-            reduction="none",
-        ).view(bs, -1)  # [bs, seq-1]
-    
-        mask = (shift_labels != -100)
-        sum_nll = (per_tok_nll * mask).sum(dim=1)                 # [bs]
-        n_tok = mask.sum(dim=1).to(dtype=sum_nll.dtype)           # [bs] as float
-    
-        return torch.stack([sum_nll, n_tok], dim=1).detach()
-
-    def _compute_metrics(self, eval_preds: EvalPrediction):
-        stats, _labels = eval_preds  # stats is [N,2] after concatenation over eval set
-        sum_nll = stats[:, 0]
-        n_tok   = stats[:, 1]
-    
-        total_nll = float(np.sum(sum_nll))
-        total_tok = float(np.sum(n_tok))
-    
-        mean_loss = total_nll / max(total_tok, 1.0)
-        ppl = math.exp(mean_loss) if mean_loss < 100 else float("inf")
-    
-        return {
-            "recomputed_loss": mean_loss,
-            "perplexity": ppl,
-            "n_tokens": total_tok,
-        }
 
     def __init__(self, **kwargs):
         self.config = TrainMemoryTaskConfig(**kwargs)
@@ -510,12 +407,6 @@ class TrainMemoryTask:
             
             initial_weights = initializer.initialize(**init_kwargs)
             model.model.rebuild_virtual_prompt(weights=initial_weights)
-            # model.initialize_virtual_prompt(
-            #     tokenizer=tokenizer,
-            #     method=cfg.model.model_config.initialization_method,
-            #     config=cfg.model.model_config.initializer_config,
-            #     dataset_path=cfg.dataset.path
-            # )
 
         # TODO: maybe pass this into initializers instead of path
         tokenized_dataset = self._load_data(tokenizer, cfg.dataset)
@@ -558,10 +449,9 @@ class TrainMemoryTask:
             train_dataset=trainer_dataset,
             eval_dataset=trainer_dataset,
             callbacks=callbacks,
-            tokenizer=tokenizer,
+            processing_class=tokenizer,
             data_collator=SelfDistillationDataCollator(tokenizer),
             compute_metrics=MemoryBankTrainer.compute_metrics,
-            # preprocess_logits_for_metrics=self._preprocess_logits_for_metrics,
         )
 
         print("Starting memory training...")
