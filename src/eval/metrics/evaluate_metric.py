@@ -22,7 +22,7 @@ class EvaluateMetric(BaseMetric):
     including pre and post processing for prediction generation.
     The input_ids and attention_masks are precomputed during initialization.
     """
-    def __init__(self, config: EvaluateMetricConfig, tokenizer, eval_dataset: Any, output_dir: str):
+    def __init__(self, config: EvaluateMetricConfig, tokenizer, eval_dataset: Any, output_dir: str, prompt_config):
         super().__init__(config, tokenizer, eval_dataset, output_dir)
 
         self.metric_evaluator = evaluate.load(self.config.metric_name)

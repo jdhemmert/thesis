@@ -20,7 +20,7 @@ class EvaluateMetricLoader(BaseMetricLoader):
             tokenizer=self.tokenizer,
             eval_dataset=self.eval_dataset,
             output_dir=self.output_dir,
-            prompt_config=prompt_config,
+            prompt_config=self.prompt_config,
         )
 
 
@@ -34,7 +34,7 @@ class BeaverMetricLoader(BaseMetricLoader):
             tokenizer=self.tokenizer,
             eval_dataset=self.eval_dataset,
             output_dir=self.output_dir,
-            prompt_config=prompt_config,
+            prompt_config=self.prompt_config,
         )
 
 
