@@ -4,7 +4,6 @@ defaults:
   - task: default_task
   - model: standard
   - prompts: default
-  - /task/extrinsic_validation: perplexity
 
 base_output_dir: results/${experiment_path}/${now:%Y-%m-%d_%H-%M-%S}
 hydra:

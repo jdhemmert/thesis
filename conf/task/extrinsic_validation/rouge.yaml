@@ -4,4 +4,4 @@ metric_config:
     _target_: src.eval.metrics.evaluate_metric.EvaluateMetricConfig
     metric_name: rouge
     log_predictions: True
-    sample_count: 10
+    sample_count: 100
