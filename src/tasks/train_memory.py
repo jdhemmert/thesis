@@ -296,7 +296,7 @@ class TrainMemoryTaskConfig(BaseTaskConfig):
     alpha: float = 0.5
     temperature: float = 1.0
 
-    initialization_method: InitializerName = InitializerName.RANDOM
+    initialization_method: Optional[InitializerName] = None
     initialization_config: dict = field(default_factory=lambda: { })
 
     trainable_strategy: str = "soft_prompt_only" # all, soft_prompt_only
@@ -376,7 +376,6 @@ class TrainMemoryTask:
 
     def __init__(self, **kwargs):
         self.config = TrainMemoryTaskConfig(**kwargs)
-        self.metric = evaluate.load("perplexity")
 
     def main(self, cwd: str, cfg: DictConfig):
         """
@@ -390,21 +389,26 @@ class TrainMemoryTask:
         model, tokenizer = ModelFactory.load(cfg)
         
         # Explicitly initialize the soft prompt if the model supports it
-        if hasattr(model, 'initialize_virtual_prompt') and cfg.model.model_config.initialization_method:
-            print(f"Performing soft prompt initialization with method: '{self.config.initialization_method.value}'...")
+        init_method = self.config.initialization_method or getattr(cfg.model.model_config, "initialization_method", None)
+        
+        if hasattr(model.model, 'rebuild_virtual_prompt') and init_method:
+            print(f"Performing soft prompt initialization with method: '{init_method}'...")
             
-            initializer_class = INITIALIZER_MAP.get(self.config.initialization_method.value)
+            initializer_class = INITIALIZER_MAP.get(str(init_method))
             if not initializer_class:
-                raise ValueError(f"Unknown initializer: {self.config.initialization_method.value}")
+                raise ValueError(f"Unknown initializer: {init_method}")
             
             initializer = initializer_class()
             
+            # Combine common kwargs with task-specific initialization config
             init_kwargs = {
-                "main_model": self.model.model,
+                "model": model.model,
+                "main_model": model.model, # for compatibility with some initializers
                 "main_tokenizer": tokenizer,
-                "virtual_token_count": self.config.virtual_token_count,
-                "dataset_path": dataset_path,
-                **self.config.initializer_config,
+                "virtual_token_count": cfg.model.model_config.virtual_token_count,
+                "dataset_path": cfg.dataset.path,
+                "noise_level": getattr(cfg.model.model_config, "initialization_noise_level", 0.01),
+                **self.config.initialization_config,
             }
             
             initial_weights = initializer.initialize(**init_kwargs)
