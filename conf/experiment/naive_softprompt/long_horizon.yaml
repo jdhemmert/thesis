@@ -7,24 +7,21 @@ defaults:
   - _self_
 
 
-experiment_path: "naive_softprompt/kl_saturation"
+experiment_path: "naive_softprompt/long_horizon"
 hydra:
     mode: MULTIRUN
     sweep:
-        subdir: ${task.sample_n}samples_${model.model_config.virtual_token_count}tokens
+        subdir: ${task.sample_n}samples_${model.model_config.virtual_token_count}tokens_${model.model_config.attention_dropout}dropout
     sweeper:
         params:
             task.sample_n: 50, 100, 500, 1000
-            model.model_config.virtual_token_count: 20, 50, 100, 500, 1000
+            model.model_config.virtual_token_count: 500, 1000
+            model.model_config.attention_dropout: 0.2, 0.4, 0.6, 0.8
 
 task:
-    num_train_epochs: 100
+    num_train_epochs: 1000
 
     learning_rate: 5e-2
     lr_scheduler_type: constant
     
     trainable_strategy: "soft_prompt_only"
-    
-    extrinsic_validation:
-        metric_config:
-            sample_count: 100

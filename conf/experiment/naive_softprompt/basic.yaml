@@ -10,19 +10,18 @@ experiment_path: "naive_softprompt/basic"
 hydra:
     mode: MULTIRUN
     sweep:
-        subdir: ${task.num_train_epochs}_epochs
+        subdir: ${model.model_config.virtual_token_count}tokens_${task.initialization_config.noise_level}noise
     sweeper:
         params:
-            task.num_train_epochs: 1, 2
+            # task.num_train_epochs: 5, 10
+            model.model_config.virtual_token_count: 20, 50, 100
+            +task.initialization_config.noise_level: 0.01, 0.1, 0.5, 1
 
 task:
-    num_train_epochs: 1
+    num_train_epochs: 20
     trainable_strategy: "soft_prompt_only"
 
     extrinsic_validation:
-        frequency: END
-        metric_type: evaluate
+        frequency: NEVER
         metric_config:
-            metric_name: rouge
-            sample_count: 100
-            log_predictions: yes
+            log_predictions: true
