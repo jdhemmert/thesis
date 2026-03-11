@@ -3,6 +3,8 @@ from typing import Optional, Any
 
 import json
 import math
+import time
+
 import numpy as np
 import evaluate
 
@@ -278,7 +280,7 @@ class TrainMemoryTaskConfig(BaseTaskConfig):
     lr_scheduler_type: str = "linear"
     num_train_epochs: int = 3
     precision: str = "bf16"
-    seed: int = 42
+    seed: int = int(time.time())
     max_length: int = 512
     eval_strategy: str = "epoch"
     eval_steps: int = 100
@@ -288,16 +290,16 @@ class TrainMemoryTaskConfig(BaseTaskConfig):
     extrinsic_validation: ExtrinsicValidationConfig = field(default_factory=ExtrinsicValidationConfig)
     save_strategy: str = "no"
 
-    trainer_config: dict = field(default_factory=lambda: { })
+    training_arguments: dict = field(default_factory=lambda: { })
     
     loss_type: str = "balanced"
-    alpha: float = 0.2
-    temperature: float = 0.5
+    alpha: float = 0.5
+    temperature: float = 1.0
 
     initialization_method: InitializerName = InitializerName.RANDOM
     initialization_config: dict = field(default_factory=lambda: { })
 
-    trainable_strategy: str = "all" # all, soft_prompt_only
+    trainable_strategy: str = "soft_prompt_only" # all, soft_prompt_only
 
 
 class TrainMemoryTask:
@@ -416,10 +418,12 @@ class TrainMemoryTask:
             for name, param in model.named_parameters():
                 if "virtual_prompt" not in name:
                     param.requires_grad = False
-        
+
+        # TODO: add catch-all TrainingArgument config dict
         training_args = TrainingArguments(
             output_dir=f"{cwd}/",
             learning_rate=self.config.learning_rate,
+            lr_scheduler_type=self.config.lr_scheduler_type,
             num_train_epochs=self.config.num_train_epochs,
             per_device_train_batch_size=cfg.dataset.physical_batch_size,
             gradient_accumulation_steps=cfg.dataset.accumulation_steps,
