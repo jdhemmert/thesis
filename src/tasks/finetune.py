@@ -1,4 +1,5 @@
 import os
+import json
 from dataclasses import dataclass, field
 from typing import Optional
 from omegaconf import DictConfig
@@ -13,22 +14,22 @@ from src.models.base import ModelFactory
 class FinetuneTaskConfig(BaseTaskConfig):
     _target_: str = "src.tasks.finetune.FinetuneTask"
     name: str = "finetune"
-    log_dir: str = "logs"
     seed: int = 42
-    gpu_ids: Optional[str] = None
-    epochs: int = 3
+    num_train_epochs: int = 3
     precision: str = "bf16"
-    max_seq_length: int = 512
+    max_length: int = 512
+    eval_strategy: str = "steps"
     eval_steps: int = 100
     learning_rate: float = 2e-4
     sample_n: Optional[int] = None
+    save_strategy: str = "steps"
 
 
 class FinetuneTask:
 
     def _preprocess(self, examples, tokenizer):
         """Prepares a dataset for standard supervised fine-tuning."""
-        max_length = self.config.max_seq_length
+        max_length = self.config.max_length
         full_prompts = [
             self.prompts.contextual_qa_training.format(biography=bio, question=q, answer=a)
             for bio, q, a in zip(
@@ -84,29 +85,27 @@ class FinetuneTask:
 
         self.prompts = cfg.prompts
 
-        if self.config.gpu_ids:
-            os.environ["CUDA_VISIBLE_DEVICES"] = self.config.gpu_ids
-
         model, tokenizer = ModelFactory.load(cfg)
         
         tokenized_dataset = self._load_data(tokenizer, cfg.dataset)
         
-        model.print_trainable_parameters()
+        if hasattr(model, "print_trainable_parameters"):
+            model.print_trainable_parameters()
 
-        split_dataset = tokenized_dataset.train_test_split(test_size=0.1, seed=self.config.seed)
+        split_dataset = tokenized_dataset.train_test_split(test_size=cfg.dataset.test_split_ratio, seed=self.config.seed)
         train_dataset = split_dataset["train"]
         eval_dataset = split_dataset["test"]
 
         training_args = TrainingArguments(
-            output_dir=f"{cwd}/model",
+            output_dir=f"{cwd}/",
             learning_rate=self.config.learning_rate,
-            num_train_epochs=self.config.epochs,
+            num_train_epochs=self.config.num_train_epochs,
             per_device_train_batch_size=cfg.dataset.physical_batch_size,
             gradient_accumulation_steps=cfg.dataset.accumulation_steps,
             seed=self.config.seed,
-            evaluation_strategy="steps",
+            eval_strategy=self.config.eval_strategy,
             eval_steps=self.config.eval_steps,
-            save_strategy="steps",
+            save_strategy=self.config.save_strategy,
             logging_steps=10,
             fp16=self.config.precision == 'fp16',
             bf16=self.config.precision == 'bf16',
@@ -117,11 +116,15 @@ class FinetuneTask:
             args=training_args,
             train_dataset=train_dataset,
             eval_dataset=eval_dataset,
-            tokenizer=tokenizer,
+            processing_class=tokenizer,
             data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
         )
 
         print("Starting finetuning...")
-        trainer.train()
+        results = trainer.train()
         trainer.save_model()
+        trainer.save_metrics("train", results.metrics)
+        
+        with open(f"{cwd}/eval_log.json", "w") as fout:
+            json.dump(trainer.state.log_history, fout)
         print("Finetuning complete.")
