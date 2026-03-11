@@ -301,52 +301,65 @@ class TrainMemoryTaskConfig(BaseTaskConfig):
 
     trainable_strategy: str = "soft_prompt_only" # all, soft_prompt_only
 
+    dataset_mode: str = "qa" # qa, wikitext
+
 
 class TrainMemoryTask:
     def _preprocess(self, examples, tokenizer):
         """
-        Builds oracle+memory sequences INCLUDING the answer, and computes prompt lengths
-        using the generation templates (no answer) for answer-only masking / slicing.
+        Builds oracle+memory sequences and computes prompt lengths.
+        Supports both QA pairs and raw text (e.g. WikiText).
         """
         max_length = self.config.max_length
     
-        bios = examples["biography"]
-        qs   = examples["question"]
-        ans  = examples["answer"]
-    
-        # Full sequences including answer
-        oracle_texts = [
-            self.prompts.contextual_qa_training.format(biography=b, question=q, answer=a)
-            for b, q, a in zip(bios, qs, ans)
-        ]
-        memory_texts = [
-            self.prompts.direct_qa_training.format(question=q, answer=a)
-            for q, a in zip(qs, ans)
-        ]
-    
-        # Prefixes with no answer, used to compute prompt lengths for masking/slicing
-        oracle_prefixes = [
-            self.prompts.contextual_qa_generation.format(biography=b, question=q)
-            for b, q in zip(bios, qs)
-        ]
-        memory_prefixes = [
-            self.prompts.direct_qa_generation.format(question=q)
-            for q in qs
-        ]
+        if self.config.dataset_mode == "wikitext" or ("text" in examples and "question" not in examples):
+            # Raw text mode (e.g. WikiText for Null-Alignment)
+            texts = examples["text"]
+            oracle_texts = texts
+            memory_texts = texts
+            
+            oracle_pref_lens = [0] * len(texts)
+            memory_pref_lens = [0] * len(texts)
+        else:
+            # QA mode (standard memory training)
+            bios = examples["biography"]
+            qs   = examples["question"]
+            ans  = examples["answer"]
+        
+            oracle_texts = [
+                self.prompts.contextual_qa_training.format(biography=b, question=q, answer=a)
+                for b, q, a in zip(bios, qs, ans)
+            ]
+            memory_texts = [
+                self.prompts.direct_qa_training.format(question=q, answer=a)
+                for q, a in zip(qs, ans)
+            ]
+        
+            oracle_prefixes = [
+                self.prompts.contextual_qa_generation.format(biography=b, question=q)
+                for b, q in zip(bios, qs)
+            ]
+            memory_prefixes = [
+                self.prompts.direct_qa_generation.format(question=q)
+                for q in qs
+            ]
+            
+            oracle_pref = tokenizer(oracle_prefixes, truncation=True, max_length=max_length, add_special_tokens=True)
+            memory_pref = tokenizer(memory_prefixes, truncation=True, max_length=max_length, add_special_tokens=True)
+            
+            oracle_pref_lens = [len(x) for x in oracle_pref.input_ids]
+            memory_pref_lens = [len(x) for x in memory_pref.input_ids]
     
         oracle = tokenizer(oracle_texts, truncation=True, max_length=max_length, add_special_tokens=True)
         memory = tokenizer(memory_texts, truncation=True, max_length=max_length, add_special_tokens=True)
-    
-        oracle_pref = tokenizer(oracle_prefixes, truncation=True, max_length=max_length, add_special_tokens=True)
-        memory_pref = tokenizer(memory_prefixes, truncation=True, max_length=max_length, add_special_tokens=True)
     
         return {
             "oracle_input_ids": oracle.input_ids,
             "oracle_attention_mask": oracle.attention_mask,
             "memory_input_ids": memory.input_ids,
             "memory_attention_mask": memory.attention_mask,
-            "oracle_prompt_len": [len(x) for x in oracle_pref.input_ids],
-            "memory_prompt_len": [len(x) for x in memory_pref.input_ids],
+            "oracle_prompt_len": oracle_pref_lens,
+            "memory_prompt_len": memory_pref_lens,
         }
 
 

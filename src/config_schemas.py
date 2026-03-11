@@ -3,15 +3,16 @@ from typing import Any, Optional
 
 from omegaconf import MISSING
 from peft import PeftConfig
+from hydra.core.config_store import ConfigStore
 
 from src.tasks.base import BaseTaskConfig
 from src.models.loaders import ModelArchitecture
 
 @dataclass
 class DatasetConfig:
-    path: str = "data/qa_finetune_dataset_12k.jsonl"
+    path: str = MISSING
     test_split_ratio: float = 0.125
-    streaming: bool = True
+    streaming: bool = False
     physical_batch_size: int = 4
     accumulation_steps: int = 1
 
@@ -46,3 +47,5 @@ class Config:
     experiment_path: str = field(default="scratch")
     base_output_dir: str = field(default=MISSING)
 
+cs = ConfigStore.instance()
+cs.store(group="dataset", name="base_dataset", node=DatasetConfig)
