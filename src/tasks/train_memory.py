@@ -286,7 +286,7 @@ class TrainMemoryTaskConfig(BaseTaskConfig):
     sample_strategy: str = "random"
     log_predictions: bool = True
     extrinsic_validation: ExtrinsicValidationConfig = field(default_factory=ExtrinsicValidationConfig)
-    save_strategy: str = "steps"
+    save_strategy: str = "no"
 
     trainer_config: dict = field(default_factory=lambda: { })
     
@@ -461,4 +461,6 @@ class TrainMemoryTask:
         trainer.save_metrics("eval", results.metrics)
         with open(f"{cwd}/eval_log.json", "w") as fout:
             json.dump(trainer.state.log_history, fout)
+        if hasattr(model.model, "virtual_prompt"):
+            torch.save(model.model.virtual_prompt, f"{cwd}/virtual_prompt.pt")
         print("Memory training complete.")
