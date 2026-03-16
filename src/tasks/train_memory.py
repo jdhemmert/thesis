@@ -139,20 +139,17 @@ class MemoryBankTrainer(Trainer):
 
     def prediction_step(self, model, inputs, prediction_loss_only, ignore_keys=None):
         """
-        Returns compact per-example stats:
-          [student_sum_nll, teacher_sum_nll, kl_sum, L, oracle_answer_len, memory_answer_len]
-        where L is the aligned answer-token count actually used for CE/KL.
-    
-        This patch is focused on diagnosing why eval_n_answer_tokens is small.
+        Returns:
+          loss: the same teacher-only distillation loss used in compute_loss
+          predictions: compact per-example stats
+            [student_sum_nll, teacher_sum_nll, kl_sum, L]
+          labels: dummy labels so compute_metrics is invoked
         """
         import torch
         import torch.nn.functional as F
     
         def _real_len(attn_mask_1ex: torch.Tensor) -> int:
             return int(attn_mask_1ex.sum().item())
-    
-        def _answer_lens(prompt_len: int, attn_mask_1ex: torch.Tensor) -> int:
-            return max(_real_len(attn_mask_1ex) - prompt_len, 0)
     
         def _answer_pred_slice(logits_1ex: torch.Tensor, prompt_len: int, attn_mask_1ex: torch.Tensor):
             """
@@ -182,22 +179,39 @@ class MemoryBankTrainer(Trainer):
                 use_virtual_tokens=True,
             )
     
+            # Compute the same eval loss as compute_loss
+            loss = teacher_only_distill_loss(
+                teacher_logits=oracle_out.logits,
+                student_logits=student_out.logits,
+                oracle_prompt_len=inputs["oracle_prompt_len"],
+                memory_prompt_len=inputs["memory_prompt_len"],
+                oracle_attention_mask=inputs["oracle_attention_mask"],
+                memory_attention_mask=inputs["memory_attention_mask"],
+                temperature=self.T,
+                memory_labels=inputs["memory_labels"],
+                gt_ce_weight=getattr(self, "gt_ce_weight", 1.0),
+            )
+    
             teacher_logits = oracle_out.logits   # [bs, seq, vocab]
             student_logits = student_out.logits  # [bs, seq, vocab]
     
             bs, seq, vocab = student_logits.shape
             T = float(getattr(self, "T", 1.0))
     
-            # [student_sum_nll, teacher_sum_nll, kl_sum, L, oracle_answer_len, memory_answer_len]
-            stats = student_logits.new_zeros((bs, 6), dtype=torch.float32)
+            # [student_sum_nll, teacher_sum_nll, kl_sum, L]
+            stats = student_logits.new_zeros((bs, 4), dtype=torch.float32)
     
             for i in range(bs):
                 t_prompt = int(inputs["oracle_prompt_len"][i].item())
                 s_prompt = int(inputs["memory_prompt_len"][i].item())
     
                 # Prediction slices corresponding to answer tokens
-                t_slice = _answer_pred_slice(teacher_logits[i], t_prompt, inputs["oracle_attention_mask"][i])  # [Lt, vocab]
-                s_slice = _answer_pred_slice(student_logits[i], s_prompt, inputs["memory_attention_mask"][i])  # [Ls, vocab]
+                t_slice = _answer_pred_slice(
+                    teacher_logits[i], t_prompt, inputs["oracle_attention_mask"][i]
+                )  # [Lt, vocab]
+                s_slice = _answer_pred_slice(
+                    student_logits[i], s_prompt, inputs["memory_attention_mask"][i]
+                )  # [Ls, vocab]
     
                 L = min(t_slice.size(0), s_slice.size(0))
                 if L <= 0:
@@ -224,7 +238,7 @@ class MemoryBankTrainer(Trainer):
                 stats[i, 3] = float(L)
     
         dummy_labels = torch.zeros(stats.size(0), dtype=torch.int64, device=stats.device)
-        return (None, stats.detach(), dummy_labels)
+        return (loss.detach(), stats.detach(), dummy_labels)
 
 
 
@@ -237,8 +251,6 @@ class MemoryBankTrainer(Trainer):
           1 teacher_sum_nll
           2 kl_sum
           3 L (aligned answer-token count used)
-          4 oracle_answer_len (pre-alignment)
-          5 memory_answer_len (pre-alignment)
         """
         import math
         import numpy as np
@@ -267,8 +279,6 @@ class MemoryBankTrainer(Trainer):
             "n_answer_tokens": total_tok,
             "n_examples": n_examples,
         }
-
-
 
 
 @register_task(name="train_memory", group="task")
