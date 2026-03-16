@@ -66,54 +66,80 @@ class EvaluateMetric(BaseMetric):
 
     def compute_and_log_scores(self, model, state, metrics: Dict):
         """
-        Generates predictions, computes metric scores, and logs predictions if configured.
+        Generates oracle and student predictions, computes metric scores on the student,
+        and logs both generations if configured.
         """
         if model is None or self.tokenizer is None:
             print(f"Skipping EvaluateMetric({self.config.metric_name}) evaluation: model or tokenizer not available.")
             return
-
+    
         print(f"\nPerforming EvaluateMetric({self.config.metric_name}) Evaluation...")
-        all_preds = []
+    
+        student_preds = []
+        oracle_preds = []
         all_labels = []
         all_questions_for_log = []
-
+    
         model.eval()
+    
         for i in range(len(self.precomputed_data["input_ids"])):
-            input_ids = torch.tensor([self.precomputed_data['input_ids'][i]]).to(model.device)
-            attention_mask = torch.tensor([self.precomputed_data['attention_mask'][i]]).to(model.device)
-
+            input_ids = torch.tensor([self.precomputed_data["input_ids"][i]]).to(model.device)
+            attention_mask = torch.tensor([self.precomputed_data["attention_mask"][i]]).to(model.device)
+    
             with torch.no_grad():
-                generated_ids = model.generate(
+                oracle_ids = model.generate(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
                     max_new_tokens=50,
                     pad_token_id=self.tokenizer.pad_token_id,
-                    eos_token_id=self.tokenizer.eos_token_id
+                    eos_token_id=self.tokenizer.eos_token_id,
+                    use_virtual_tokens=False,
                 )
-
+                student_ids = model.generate(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    max_new_tokens=50,
+                    pad_token_id=self.tokenizer.pad_token_id,
+                    eos_token_id=self.tokenizer.eos_token_id,
+                    use_virtual_tokens=True,
+                )
+    
             num_input_tokens = len(input_ids[0])
-            pred_ids = generated_ids[0][num_input_tokens:]
-            pred_text = self.tokenizer.decode(pred_ids, skip_special_tokens=True).strip()
-
-            all_preds.append(pred_text)
+    
+            oracle_pred_ids = oracle_ids[0][num_input_tokens:]
+            student_pred_ids = student_ids[0][num_input_tokens:]
+    
+            oracle_text = self.tokenizer.decode(oracle_pred_ids, skip_special_tokens=True).strip()
+            student_text = self.tokenizer.decode(student_pred_ids, skip_special_tokens=True).strip()
+    
+            oracle_preds.append(oracle_text)
+            student_preds.append(student_text)
             all_labels.append(self.precomputed_data["answer"][i])
             all_questions_for_log.append(self.precomputed_data["question"][i])
-
-        metric_scores = self.metric_evaluator.compute(predictions=all_preds, references=all_labels, **self.config.extra_kwargs)
-
+    
+        # Compute metrics on the student predictions
+        metric_scores = self.metric_evaluator.compute(
+            predictions=student_preds,
+            references=all_labels,
+            **self.config.extra_kwargs
+        )
+    
         for key, value in metric_scores.items():
             metrics[f"eval_{key}"] = value
-
+    
         print(f"Extrinsic EvaluateMetric({self.config.metric_name}) Scores: {metric_scores}")
-
+    
+        # ---------- Logging ----------
         if state.is_world_process_zero and self.config.log_predictions:
             log_file_path = os.path.join(self.output_dir, f"prediction_log.epoch_{int(state.epoch)}.jsonl")
             print(f"Logging predictions to {log_file_path}")
+    
             with open(log_file_path, "w") as f:
-                for i in range(len(all_preds)):
+                for i in range(len(student_preds)):
                     log_entry = {
                         "question": all_questions_for_log[i],
                         "ground_truth": all_labels[i],
-                        "prediction": all_preds[i]
+                        "oracle_prediction": oracle_preds[i],
+                        "student_prediction": student_preds[i],
                     }
                     f.write(json.dumps(log_entry) + "\n")
