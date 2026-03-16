@@ -311,8 +311,6 @@ class TrainMemoryTaskConfig(BaseTaskConfig):
 
     trainable_strategy: str = "soft_prompt_only" # all, soft_prompt_only
 
-    dataset_mode: str = "qa" # qa, wikitext, attributes
-
 
 class TrainMemoryTask:
     def _preprocess(self, examples, tokenizer):
@@ -322,7 +320,7 @@ class TrainMemoryTask:
         """
         max_length = self.config.max_length
 
-        if self.config.dataset_mode == "wikitext" or ("text" in examples and "question" not in examples):
+        if self.dataset_config.dataset_mode == "wikitext" or ("text" in examples and "question" not in examples):
             # Raw text mode (e.g. WikiText for Null-Alignment)
             texts = examples["text"]
             oracle_texts = texts
@@ -333,7 +331,7 @@ class TrainMemoryTask:
             
             bios, qs, ans = texts, [""] * len(texts), [""] * len(texts)
 
-        elif self.config.dataset_mode == "attributes":
+        elif self.dataset_config.dataset_mode == "attributes":
             # Attributes mode: each row is a biography attribute set
             # Support both plm_bio_attributes and biography_attributes
             
@@ -457,7 +455,7 @@ class TrainMemoryTask:
         # If we are in attributes mode, we MUST remove original columns because 
         # the number of rows changes (expansion), and datasets.map will fail 
         # if we try to keep columns that don't match the new row count.
-        if self.config.dataset_mode == "attributes" or self.config.extrinsic_validation.frequency == ExtrinsicValidationFrequency.NEVER:
+        if self.dataset_config.dataset_mode == "attributes" or self.config.extrinsic_validation.frequency == ExtrinsicValidationFrequency.NEVER:
             remove_columns = original_columns
         else:
             remove_columns = None
@@ -480,6 +478,7 @@ class TrainMemoryTask:
         print(f"Running TrainMemoryTask: {self.config.name}")
 
         self.prompts = cfg.prompts
+        self.dataset_config = cfg.dataset
         
         model, tokenizer = ModelFactory.load(cfg)
         

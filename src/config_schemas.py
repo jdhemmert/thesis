@@ -15,6 +15,7 @@ class DatasetConfig:
     streaming: bool = False
     physical_batch_size: int = 4
     accumulation_steps: int = 1
+    dataset_mode: str = "qa" # qa, wikitext, attributes
 
 @dataclass
 class ModelConfigGroup:
