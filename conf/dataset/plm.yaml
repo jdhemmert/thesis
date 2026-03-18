@@ -1,0 +1,7 @@
+# @package dataset
+path: "data/plm_bio_attributes.jsonl"
+dataset_mode: attributes
+# test_split_ratio: 0.125
+streaming: false
+physical_batch_size: 4
+accumulation_steps: 1

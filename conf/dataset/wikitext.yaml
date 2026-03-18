@@ -1,5 +1,6 @@
 # @package dataset
 path: "data/wikitext_train.jsonl"
+dataset_mode: wikitext
 test_split_ratio: 0.05
 streaming: false
 physical_batch_size: 4
