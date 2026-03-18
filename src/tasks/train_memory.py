@@ -322,6 +322,7 @@ class TrainMemoryTask:
 
         if self.dataset_config.dataset_mode == "wikitext" or ("text" in examples and "question" not in examples):
             # Raw text mode (e.g. WikiText for Null-Alignment)
+            
             texts = examples["text"]
             oracle_texts = texts
             memory_texts = texts
@@ -394,7 +395,8 @@ class TrainMemoryTask:
             
             # Reassign for final tokenization
             bios, qs, ans = bios_out, qs_out, ans_out
-        else:
+
+        elif self.dataset_config.dataset_mode == "qa":
             # QA mode (standard memory training)
             bios = examples["biography"]
             qs   = examples["question"]
@@ -423,6 +425,10 @@ class TrainMemoryTask:
             
             oracle_pref_lens = [len(x) for x in oracle_pref.input_ids]
             memory_pref_lens = [len(x) for x in memory_pref.input_ids]
+
+        else:
+            raise RuntimeError(f"Unrecognized dataset_config.dataset_mode: {self.dataset_config.dataset_mode}")
+            
     
         oracle = tokenizer(oracle_texts, truncation=True, max_length=max_length, add_special_tokens=True)
         memory = tokenizer(memory_texts, truncation=True, max_length=max_length, add_special_tokens=True)
