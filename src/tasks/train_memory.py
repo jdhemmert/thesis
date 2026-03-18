@@ -6,6 +6,7 @@ import math
 import time
 
 import numpy as np
+import pandas as pd
 import evaluate
 
 import torch
@@ -306,6 +307,8 @@ class TrainMemoryTaskConfig(BaseTaskConfig):
     alpha: float = 0.5
     temperature: float = 1.0
 
+    return_metric_key: str = "eval_loss"
+
     initialization_method: Optional[InitializerName] = None
     initialization_config: dict = field(default_factory=lambda: { })
 
@@ -572,3 +575,26 @@ class TrainMemoryTask:
         if hasattr(model.model, "virtual_prompt"):
             torch.save(model.model.virtual_prompt, f"{cwd}/virtual_prompt.pt")
         print("Memory training complete.")
+
+        logs_df = pd.DataFrame(trainer.state.log_history)
+
+        # Keep only rows where the marker metric exists
+        if self.config.return_metric_key in logs_df.columns:
+            final_metrics = logs_df[logs_df[self.config.return_metric_key].notna()].copy()
+        else:
+            final_metrics = pd.DataFrame()
+        
+        final_eval_metric = None
+        if not final_metrics.empty and self.config.return_metric_key in final_metrics.columns:
+            eval_loss_series = pd.to_numeric(final_metrics[self.config.return_metric_key], errors="coerce").dropna()
+            if not eval_loss_series.empty:
+                final_eval_metric = float(eval_loss_series.iloc[-1])
+        
+        if final_eval_metric is None:
+            raise ValueError(
+                f"Could not determine final {self.config.return_metric_key} from trainer.state.log_history. "
+                f"Available columns: {list(logs_df.columns)}"
+            )
+        
+        print(f"Final {self.config.return_metric_key}: {final_eval_metric}")
+        return final_eval_metric

@@ -17,7 +17,7 @@ def main(cfg: DictConfig) -> None:
     cwd = HydraConfig.get().runtime.output_dir
     cfg = hydra.utils.instantiate(cfg, _convert_="partial")
 
-    cfg.task.main(cwd, cfg)
+    return cfg.task.main(cwd, cfg)
 
 if __name__ == "__main__":
     main()
