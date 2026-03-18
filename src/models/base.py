@@ -9,6 +9,21 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, PreTrainedModel, P
 from peft import get_peft_model, PeftConfig
 
 
+import time
+
+def retry_oserror(fn, retries=3, delay_s=10):
+    last_exc = None
+    for attempt in range(retries):
+        try:
+            return fn()
+        except OSError as e:
+            last_exc = e
+            if attempt == retries - 1:
+                raise
+            time.sleep(delay_s)
+    raise last_exc
+
+
 class ModelArchitecture(str, Enum):
     """Enum for names of available model architectures."""
     STANDARD = "standard"
@@ -97,12 +112,16 @@ class BaseModelLoader(ABC):
         """
         if not self.model_path:
             raise ValueError("model_path must be provided in model configuration.")
-        
-        return model_class.from_pretrained(
-            self.model_path,
-            config=self.model_config,
-            torch_dtype=self._get_dtype()
+
+        model = retry_oserror(
+            lambda: model_class.from_pretrained(
+                self.model_path,
+                config=self.model_config,
+                dtype=self._get_dtype(),
+                local_files_only=True,
+            )
         )
+        return model
 
     def _apply_peft(self, model: PreTrainedModel) -> PreTrainedModel:
         """
