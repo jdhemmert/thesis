@@ -8,6 +8,7 @@ from transformers import Trainer, TrainingArguments, DataCollatorForLanguageMode
 
 from src.tasks.base import BaseTaskConfig, register_task
 from src.models.base import ModelFactory
+from src.data.preprocessors import MemoryTaskPreprocessor
 
 @register_task(name="finetune", group="task")
 @dataclass
@@ -27,38 +28,6 @@ class FinetuneTaskConfig(BaseTaskConfig):
 
 class FinetuneTask:
 
-    def _preprocess(self, examples, tokenizer):
-        """Prepares a dataset for standard supervised fine-tuning."""
-        max_length = self.config.max_length
-        full_prompts = [
-            self.prompts.contextual_qa_training.format(biography=bio, question=q, answer=a)
-            for bio, q, a in zip(
-                examples["biography"],
-                examples["question"],
-                examples["answer"]
-            )
-        ]
-        model_inputs = tokenizer(
-            full_prompts,
-            max_length=max_length,
-            padding="max_length",
-            truncation=True
-        )
-
-        labels = [ row[:] for row in model_inputs["input_ids"] ]
-        prompt_only = [
-            self.prompts.contextual_qa_generation.format(biography=bio, question=q)
-            for bio, q in zip(examples["biography"], examples["question"])
-        ]
-        prompt_token_lengths = [len(tokenizer(p, add_special_tokens=False).input_ids) for p in prompt_only]
-
-        for i in range(len(labels)):
-            prompt_len = prompt_token_lengths[i]
-            labels[i][:prompt_len] = [-100] * prompt_len
-
-        model_inputs["labels"] = labels
-        return model_inputs
-
     def _load_data(self, tokenizer, dataset_config):
         """Loads, samples, and preprocesses the dataset for finetuning."""
         dataset = load_dataset("json", data_files=dataset_config.path)["train"]
@@ -67,10 +36,53 @@ class FinetuneTask:
         if self.config.sample_n:
             dataset = dataset.shuffle(seed=self.config.seed).select(range(self.config.sample_n))
 
+        # Use the MemoryTaskPreprocessor to handle text/qa/attributes expansion
+        preprocessor = MemoryTaskPreprocessor(
+            tokenizer=tokenizer,
+            max_length=self.config.max_length,
+            prompts=self.prompts,
+            dataset_mode=dataset_config.dataset_mode
+        )
+
+        def finetune_preprocess(examples):
+            # 1. Expand the data using the shared preprocessor
+            # This gives us 'oracle_input_ids', 'oracle_prompt_len', etc.
+            # oracle_input_ids = Bio + Q + A
+            expanded = preprocessor(examples)
+            
+            # 2. Map to standard input_ids/labels
+            # We want to train on the FULL sequence (Bio+Q+A) but only compute loss on A.
+            input_ids = expanded["oracle_input_ids"]
+            attention_mask = expanded["oracle_attention_mask"]
+            prompt_lens = expanded["oracle_prompt_len"]
+            
+            labels = []
+            for i in range(len(input_ids)):
+                lab = list(input_ids[i]) # Copy
+                p_len = prompt_lens[i]
+                
+                # Mask the prompt (Bio + Question) part
+                # We assume the tokenizer/preprocessor has correctly identified the prompt length
+                for j in range(min(len(lab), p_len)):
+                    lab[j] = -100
+                labels.append(lab)
+            
+            return {
+                "input_ids": input_ids,
+                "attention_mask": attention_mask,
+                "labels": labels
+            }
+
+        # For attributes/plm mode, we must remove columns to allow expansion
+        if dataset_config.dataset_mode == "attributes":
+            remove_columns = original_columns
+        else:
+            remove_columns = original_columns
+
         tokenized_dataset = dataset.map(
-            lambda examples: self._preprocess(examples, tokenizer=tokenizer),
+            finetune_preprocess,
             batched=True,
-            remove_columns=original_columns
+            remove_columns=remove_columns
         )
         return tokenized_dataset
 
@@ -84,6 +96,7 @@ class FinetuneTask:
         print(f"Running FinetuneTask: {self.config.name}")
 
         self.prompts = cfg.prompts
+        self.dataset_config = cfg.dataset
 
         model, tokenizer = ModelFactory.load(cfg)
         

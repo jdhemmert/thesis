@@ -23,6 +23,7 @@ class ModelConfigGroup:
     architecture: ModelArchitecture = MISSING
     model_config: Optional[Any] = field(default=MISSING)
     adapter_config: Optional[PeftConfig] = field(default=None)
+    adapter_path: Optional[str] = field(default=None)
     precision: str = field(default="bf16")
 
 @dataclass

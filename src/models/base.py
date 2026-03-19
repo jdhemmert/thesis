@@ -79,6 +79,7 @@ class BaseModelLoader(ABC):
         self.model_config = cfg.model.model_config
         self.model_precision = cfg.model.precision
         self.adapter_config = cfg.model.adapter_config
+        self.adapter_path = getattr(cfg.model, "adapter_path", None)
         self.model_path = self.model_config.model_path
 
     @abstractmethod
@@ -127,7 +128,14 @@ class BaseModelLoader(ABC):
         """
         Applies a PEFT adapter to the model if adapter_config is provided.
         """
-        if self.adapter_config:
+        from peft import PeftModel
+        if self.adapter_path:
+            # Load existing adapter from path (e.g. for memory training on top of finetuned model)
+            print(f"Loading PEFT adapter from {self.adapter_path}...")
+            model = PeftModel.from_pretrained(model, self.adapter_path, is_trainable=True)
+            model.print_trainable_parameters()
+        elif self.adapter_config:
+            # Initialize new adapter
             peft_config = hydra.utils.instantiate(self.adapter_config)
             model = get_peft_model(model, peft_config)
             print("PEFT adapter applied. Trainable parameters:")
