@@ -1,8 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Optional, Any
-
 import json
-import math
 import time
 
 import numpy as np
@@ -14,272 +12,14 @@ import torch.nn.functional as F
 import datasets
 from omegaconf import DictConfig
 from datasets import load_dataset
-from transformers import TrainingArguments, Trainer, AutoTokenizer, AutoModelForCausalLM, EvalPrediction
+from transformers import TrainingArguments
 
 from src.tasks.base import BaseTaskConfig, register_task
-# TODO: restructure these imports
-from src.training.losses import _count_answer_tokens, _answer_pred_slice, teacher_only_distill_loss
 from src.training.callbacks import ExtrinsicValidationFrequency, ExtrinsicValidationConfig, ExtrinsicValidationCallback
 from src.models.base import ModelFactory
 from src.models.initializers import InitializerName, INITIALIZER_MAP
-
-
-class SelfDistillationDataCollator:
-    """
-    Pads and collates oracle/memory streams.
-    Also creates answer-only labels for each stream:
-      - padding masked to -100
-      - prompt portion masked to -100 (answer-only)
-    """
-    def __init__(self, tokenizer):
-        self.tokenizer = tokenizer
-        assert tokenizer.pad_token_id is not None, "Tokenizer must have pad_token_id"
-
-    def __call__(self, features):
-        import torch
-
-        max_len = max(
-            max(len(f["oracle_input_ids"]) for f in features),
-            max(len(f["memory_input_ids"]) for f in features),
-        )
-
-        oracle_batch = self.tokenizer.pad(
-            {
-                "input_ids": [f["oracle_input_ids"] for f in features],
-                "attention_mask": [f["oracle_attention_mask"] for f in features],
-            },
-            padding="max_length",
-            max_length=max_len,
-            return_tensors="pt",
-        )
-
-        memory_batch = self.tokenizer.pad(
-            {
-                "input_ids": [f["memory_input_ids"] for f in features],
-                "attention_mask": [f["memory_attention_mask"] for f in features],
-            },
-            padding="max_length",
-            max_length=max_len,
-            return_tensors="pt",
-        )
-
-        oracle_prompt_len = torch.tensor([int(f["oracle_prompt_len"]) for f in features], dtype=torch.long)
-        memory_prompt_len = torch.tensor([int(f["memory_prompt_len"]) for f in features], dtype=torch.long)
-
-        # Build answer-only labels
-        oracle_labels = oracle_batch["input_ids"].clone()
-        memory_labels = memory_batch["input_ids"].clone()
-
-        # Mask padding
-        oracle_labels[oracle_batch["attention_mask"] == 0] = -100
-        memory_labels[memory_batch["attention_mask"] == 0] = -100
-
-        # Mask prompt part
-        for i in range(len(features)):
-            oracle_labels[i, : int(oracle_prompt_len[i].item())] = -100
-            memory_labels[i, : int(memory_prompt_len[i].item())] = -100
-
-        return {
-            "oracle_input_ids": oracle_batch["input_ids"],
-            "oracle_attention_mask": oracle_batch["attention_mask"],
-            "oracle_prompt_len": oracle_prompt_len,
-            "oracle_labels": oracle_labels,
-
-            "memory_input_ids": memory_batch["input_ids"],
-            "memory_attention_mask": memory_batch["attention_mask"],
-            "memory_prompt_len": memory_prompt_len,
-            "memory_labels": memory_labels,
-        }
-
-class MemoryBankTrainer(Trainer):
-    """Custom Trainer for self-distillation."""
-    def __init__(self, loss_type, loss_alpha, temperature, **kwargs):
-        self.loss_type = loss_type
-        self.alpha = loss_alpha
-        self.T = temperature
-        super().__init__(**kwargs)
-
-    def evaluate(self, *args, **kwargs):
-        metrics = super().evaluate(*args, **kwargs)
-
-        if False and "eval_loss" in metrics:
-            print("Calculating perplexity...")
-            try:
-                metrics["eval_ppl"] = math.exp(metrics["eval_loss"])
-            except OverflowError:
-                metrics["eval_ppl"] = float("inf")
-
-        return metrics
-
-    def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
-        oracle_out = model(
-            input_ids=inputs["oracle_input_ids"],
-            attention_mask=inputs["oracle_attention_mask"],
-            use_virtual_tokens=False,
-        )
-        student_out = model(
-            input_ids=inputs["memory_input_ids"],
-            attention_mask=inputs["memory_attention_mask"],
-            use_virtual_tokens=True,
-        )
-    
-        loss = teacher_only_distill_loss(
-            teacher_logits=oracle_out.logits,
-            student_logits=student_out.logits,
-            oracle_prompt_len=inputs["oracle_prompt_len"],
-            memory_prompt_len=inputs["memory_prompt_len"],
-            oracle_attention_mask=inputs["oracle_attention_mask"],
-            memory_attention_mask=inputs["memory_attention_mask"],
-            temperature=self.T,
-            # use_gt_ce=self.use_gt_ce,
-            memory_labels=inputs["memory_labels"],
-            gt_ce_weight=getattr(self, "gt_ce_weight", 1.0),
-        )
-        return (loss, student_out) if return_outputs else loss
-
-
-    def prediction_step(self, model, inputs, prediction_loss_only, ignore_keys=None):
-        """
-        Returns:
-          loss: the same teacher-only distillation loss used in compute_loss
-          predictions: compact per-example stats
-            [student_sum_nll, teacher_sum_nll, kl_sum, L]
-          labels: dummy labels so compute_metrics is invoked
-        """
-        import torch
-        import torch.nn.functional as F
-    
-        def _real_len(attn_mask_1ex: torch.Tensor) -> int:
-            return int(attn_mask_1ex.sum().item())
-    
-        def _answer_pred_slice(logits_1ex: torch.Tensor, prompt_len: int, attn_mask_1ex: torch.Tensor):
-            """
-            logits_1ex: [seq, vocab]
-            Answer token indices: [prompt_len, real_len-1]
-            Predicted by logits positions: [prompt_len-1, real_len-2]
-            """
-            real_len = _real_len(attn_mask_1ex)
-            start = max(prompt_len - 1, 0)
-            end = max(real_len - 1, 0)  # exclusive
-            if end <= start:
-                return logits_1ex.new_zeros((0, logits_1ex.size(-1)))
-            return logits_1ex[start:end, :]
-    
-        model.eval()
-        inputs = self._prepare_inputs(inputs)
-    
-        with torch.no_grad():
-            oracle_out = model(
-                input_ids=inputs["oracle_input_ids"],
-                attention_mask=inputs["oracle_attention_mask"],
-                use_virtual_tokens=False,
-            )
-            student_out = model(
-                input_ids=inputs["memory_input_ids"],
-                attention_mask=inputs["memory_attention_mask"],
-                use_virtual_tokens=True,
-            )
-    
-            # Compute the same eval loss as compute_loss
-            loss = teacher_only_distill_loss(
-                teacher_logits=oracle_out.logits,
-                student_logits=student_out.logits,
-                oracle_prompt_len=inputs["oracle_prompt_len"],
-                memory_prompt_len=inputs["memory_prompt_len"],
-                oracle_attention_mask=inputs["oracle_attention_mask"],
-                memory_attention_mask=inputs["memory_attention_mask"],
-                temperature=self.T,
-                memory_labels=inputs["memory_labels"],
-                gt_ce_weight=getattr(self, "gt_ce_weight", 1.0),
-            )
-    
-            teacher_logits = oracle_out.logits   # [bs, seq, vocab]
-            student_logits = student_out.logits  # [bs, seq, vocab]
-    
-            bs, seq, vocab = student_logits.shape
-            T = float(getattr(self, "T", 1.0))
-    
-            # [student_sum_nll, teacher_sum_nll, kl_sum, L]
-            stats = student_logits.new_zeros((bs, 4), dtype=torch.float32)
-    
-            for i in range(bs):
-                t_prompt = int(inputs["oracle_prompt_len"][i].item())
-                s_prompt = int(inputs["memory_prompt_len"][i].item())
-    
-                # Prediction slices corresponding to answer tokens
-                t_slice = _answer_pred_slice(
-                    teacher_logits[i], t_prompt, inputs["oracle_attention_mask"][i]
-                )  # [Lt, vocab]
-                s_slice = _answer_pred_slice(
-                    student_logits[i], s_prompt, inputs["memory_attention_mask"][i]
-                )  # [Ls, vocab]
-    
-                L = min(t_slice.size(0), s_slice.size(0))
-                if L <= 0:
-                    continue
-    
-                # Targets: the answer tokens themselves (aligned by answer index)
-                t_targets = inputs["oracle_input_ids"][i, t_prompt : t_prompt + L]
-                s_targets = inputs["memory_input_ids"][i, s_prompt : s_prompt + L]
-    
-                # Answer-only NLL sums
-                teacher_sum_nll = F.cross_entropy(t_slice[:L, :], t_targets, reduction="sum")
-                student_sum_nll = F.cross_entropy(s_slice[:L, :], s_targets, reduction="sum")
-    
-                # KL(teacher || student) over answer predictions
-                t_logp = F.log_softmax(t_slice[:L, :] / T, dim=-1)
-                s_logp = F.log_softmax(s_slice[:L, :] / T, dim=-1)
-                t_p = t_logp.exp()
-                kl_tok = (t_p * (t_logp - s_logp)).sum(dim=-1)  # [L]
-                kl_sum = kl_tok.sum() * (T * T)
-    
-                stats[i, 0] = student_sum_nll
-                stats[i, 1] = teacher_sum_nll
-                stats[i, 2] = kl_sum
-                stats[i, 3] = float(L)
-    
-        dummy_labels = torch.zeros(stats.size(0), dtype=torch.int64, device=stats.device)
-        return (loss.detach(), stats.detach(), dummy_labels)
-
-
-
-    @classmethod
-    def compute_metrics(cls, eval_pred):
-        """
-        Aggregates stats emitted by prediction_step.
-        stats columns:
-          0 student_sum_nll
-          1 teacher_sum_nll
-          2 kl_sum
-          3 L (aligned answer-token count used)
-        """
-        import math
-        import numpy as np
-    
-        stats = eval_pred.predictions
-    
-        student_sum_nll = stats[:, 0]
-        teacher_sum_nll = stats[:, 1]
-        kl_sum          = stats[:, 2]
-        L_used          = stats[:, 3]
-    
-        total_tok = float(np.sum(L_used))
-        n_examples = float(stats.shape[0])
-    
-        student_ce = float(np.sum(student_sum_nll)) / max(total_tok, 1.0)
-        teacher_ce = float(np.sum(teacher_sum_nll)) / max(total_tok, 1.0)
-        kl_per_tok = float(np.sum(kl_sum)) / max(total_tok, 1.0)
-    
-        return {
-            "student_ce_answer": student_ce,
-            "teacher_ce_answer": teacher_ce,
-            "delta_ce_answer": student_ce - teacher_ce,
-            "student_ppl_answer": math.exp(student_ce) if student_ce < 100 else float("inf"),
-            "teacher_ppl_answer": math.exp(teacher_ce) if teacher_ce < 100 else float("inf"),
-            "kl_per_token_answer": kl_per_tok,
-            "n_answer_tokens": total_tok,
-            "n_examples": n_examples,
-        }
+from src.training.memory import MemoryBankTrainer, SelfDistillationDataCollator
+from src.data.preprocessors import MemoryTaskPreprocessor
 
 
 @register_task(name="train_memory", group="task")
@@ -316,140 +56,6 @@ class TrainMemoryTaskConfig(BaseTaskConfig):
 
 
 class TrainMemoryTask:
-    def _preprocess(self, examples, tokenizer):
-        """
-        Builds oracle+memory sequences and computes prompt lengths.
-        Supports both QA pairs and raw text (e.g. WikiText).
-        """
-        max_length = self.config.max_length
-
-        if self.dataset_config.dataset_mode == "wikitext" or ("text" in examples and "question" not in examples):
-            # Raw text mode (e.g. WikiText for Null-Alignment)
-            
-            texts = examples["text"]
-            oracle_texts = texts
-            memory_texts = texts
-
-            oracle_pref_lens = [0] * len(texts)
-            memory_pref_lens = [0] * len(texts)
-            
-            bios, qs, ans = texts, [""] * len(texts), [""] * len(texts)
-
-        elif self.dataset_config.dataset_mode == "attributes":
-            # Attributes mode: each row is a biography attribute set
-            # Support both plm_bio_attributes and biography_attributes
-            
-            oracle_texts, memory_texts = [], []
-            oracle_prefixes, memory_prefixes = [], []
-            bios_out, qs_out, ans_out = [], [], []
-            
-            batch_size = len(next(iter(examples.values())))
-            
-            for i in range(batch_size):
-                ex = {k: v[i] for k, v in examples.items()}
-                
-                # Detect format
-                is_plm = "first_name" in ex and "last_name" in ex
-                
-                if is_plm:
-                    name = f"{ex['first_name']} {ex['middle_name']} {ex['last_name']}".replace("  ", " ").strip()
-                    bio_text = ex.get("bio", "")
-                    # Generate Q/A pairs for PLM
-                    qa_pairs = [
-                        ("What is the birth city of {name}?", ex.get("birthcity", "")),
-                        ("Which university did {name} attend?", ex.get("university", "")),
-                        ("What is the field of study of {name}?", ex.get("field", "")),
-                        ("What is the job of {name}?", ex.get("job", "")),
-                        ("Which company did {name} work for?", ex.get("company1name", "")),
-                        ("In which city is the company {company1name} located?", ex.get("company1city", "")),
-                        ("In what year was {name} born?", str(ex.get("birthyear", ""))),
-                        ("In what month was {name} born?", ex.get("birthmonth", "")),
-                    ]
-                else:
-                    name = ex.get("name", "Unknown")
-                    bio_text = ex.get("biography", "")
-                    # Generate Q/A pairs for Standard
-                    qa_pairs = [
-                        ("What is the birth date of {name}?", ex.get("birth_date", "")),
-                        ("What is the birth city of {name}?", ex.get("birth_city", "")),
-                        ("Which university did {name} study?", ex.get("college", "")),
-                        ("What major did {name} study?", ex.get("major", "")),
-                        ("Which company did {name} work for?", ex.get("company", "")),
-                    ]
-                
-                for q_tmpl, a in qa_pairs:
-                    if not a: continue
-                    
-                    q = q_tmpl.format(name=name, company1name=ex.get("company1name", ""))
-                    
-                    oracle_texts.append(self.prompts.contextual_qa_training.format(biography=bio_text, question=q, answer=a))
-                    memory_texts.append(self.prompts.direct_qa_training.format(question=q, answer=a))
-                    oracle_prefixes.append(self.prompts.contextual_qa_generation.format(biography=bio_text, question=q))
-                    memory_prefixes.append(self.prompts.direct_qa_generation.format(question=q))
-                    
-                    bios_out.append(bio_text)
-                    qs_out.append(q)
-                    ans_out.append(a)
-            
-            oracle_pref = tokenizer(oracle_prefixes, truncation=True, max_length=max_length, add_special_tokens=True)
-            memory_pref = tokenizer(memory_prefixes, truncation=True, max_length=max_length, add_special_tokens=True)
-            oracle_pref_lens = [len(x) for x in oracle_pref.input_ids]
-            memory_pref_lens = [len(x) for x in memory_pref.input_ids]
-            
-            # Reassign for final tokenization
-            bios, qs, ans = bios_out, qs_out, ans_out
-
-        elif self.dataset_config.dataset_mode == "qa":
-            # QA mode (standard memory training)
-            bios = examples["biography"]
-            qs   = examples["question"]
-            ans  = examples["answer"]
-        
-            oracle_texts = [
-                self.prompts.contextual_qa_training.format(biography=b, question=q, answer=a)
-                for b, q, a in zip(bios, qs, ans)
-            ]
-            memory_texts = [
-                self.prompts.direct_qa_training.format(question=q, answer=a)
-                for q, a in zip(qs, ans)
-            ]
-        
-            oracle_prefixes = [
-                self.prompts.contextual_qa_generation.format(biography=b, question=q)
-                for b, q in zip(bios, qs)
-            ]
-            memory_prefixes = [
-                self.prompts.direct_qa_generation.format(question=q)
-                for q in qs
-            ]
-            
-            oracle_pref = tokenizer(oracle_prefixes, truncation=True, max_length=max_length, add_special_tokens=True)
-            memory_pref = tokenizer(memory_prefixes, truncation=True, max_length=max_length, add_special_tokens=True)
-            
-            oracle_pref_lens = [len(x) for x in oracle_pref.input_ids]
-            memory_pref_lens = [len(x) for x in memory_pref.input_ids]
-
-        else:
-            raise RuntimeError(f"Unrecognized dataset_config.dataset_mode: {self.dataset_config.dataset_mode}")
-            
-    
-        oracle = tokenizer(oracle_texts, truncation=True, max_length=max_length, add_special_tokens=True)
-        memory = tokenizer(memory_texts, truncation=True, max_length=max_length, add_special_tokens=True)
-    
-        return {
-            "oracle_input_ids": oracle.input_ids,
-            "oracle_attention_mask": oracle.attention_mask,
-            "memory_input_ids": memory.input_ids,
-            "memory_attention_mask": memory.attention_mask,
-            "oracle_prompt_len": oracle_pref_lens,
-            "memory_prompt_len": memory_pref_lens,
-            "biography": bios,
-            "question": qs,
-            "answer": ans,
-        }
-
-
-
     def _load_data(self, tokenizer, dataset_config):
         """Loads, samples, and preprocesses the dataset for memory training."""
         dataset = load_dataset("json", data_files=dataset_config.path)["train"]
@@ -469,8 +75,15 @@ class TrainMemoryTask:
         else:
             remove_columns = None
 
+        preprocessor = MemoryTaskPreprocessor(
+            tokenizer=tokenizer,
+            max_length=self.config.max_length,
+            prompts=self.prompts,
+            dataset_mode=self.dataset_config.dataset_mode
+        )
+
         tokenized_dataset = dataset.map(
-            lambda examples: self._preprocess(examples, tokenizer=tokenizer),
+            preprocessor,
             batched=True,
             remove_columns=remove_columns
         )
