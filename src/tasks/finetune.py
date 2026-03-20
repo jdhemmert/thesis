@@ -36,48 +36,45 @@ class FinetuneTask:
         if self.config.sample_n:
             dataset = dataset.shuffle(seed=self.config.seed).select(range(self.config.sample_n))
 
-        # Use the MemoryTaskPreprocessor to handle text/qa/attributes expansion
         preprocessor = MemoryTaskPreprocessor(
             tokenizer=tokenizer,
             max_length=self.config.max_length,
             prompts=self.prompts,
-            dataset_mode=dataset_config.dataset_mode
+            dataset_mode=dataset_config.dataset_mode,
+            padding="max_length"
         )
 
         def finetune_preprocess(examples):
-            # 1. Expand the data using the shared preprocessor
-            # This gives us 'oracle_input_ids', 'oracle_prompt_len', etc.
-            # oracle_input_ids = Bio + Q + A
+
             expanded = preprocessor(examples)
-            
-            # 2. Map to standard input_ids/labels
-            # We want to train on the FULL sequence (Bio+Q+A) but only compute loss on A.
             input_ids = expanded["oracle_input_ids"]
             attention_mask = expanded["oracle_attention_mask"]
             prompt_lens = expanded["oracle_prompt_len"]
             
             labels = []
             for i in range(len(input_ids)):
-                lab = list(input_ids[i]) # Copy
+                lab = list(input_ids[i])
                 p_len = prompt_lens[i]
                 
-                # Mask the prompt (Bio + Question) part
-                # We assume the tokenizer/preprocessor has correctly identified the prompt length
-                for j in range(min(len(lab), p_len)):
-                    lab[j] = -100
+                # Mask the prompt (Bio + Question) AND the padding tokens
+                # Loss should only be calculated on the Answer tokens
+                for j in range(len(lab)):
+                    if j < p_len or attention_mask[i][j] == 0:
+                        lab[j] = -100
                 labels.append(lab)
             
             return {
                 "input_ids": input_ids,
                 "attention_mask": attention_mask,
-                "labels": labels
+                "labels": labels,
+                "biography": expanded["biography"],
+                "question": expanded["question"],
+                "answer": expanded["answer"]
             }
 
-        # For attributes/plm mode, we must remove columns to allow expansion
-        if dataset_config.dataset_mode == "attributes":
-            remove_columns = original_columns
-        else:
-            remove_columns = original_columns
+        # Since finetune_preprocess explicitly returns the metadata we care about, 
+        # it is safe to remove the raw input columns.
+        remove_columns = original_columns
 
         tokenized_dataset = dataset.map(
             finetune_preprocess,

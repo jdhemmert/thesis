@@ -1,11 +1,13 @@
 from dataclasses import dataclass
+from typing import Optional, Any
 
 @dataclass
 class MemoryTaskPreprocessor:
-    tokenizer: any
+    tokenizer: Any
     max_length: int
-    prompts: any
+    prompts: Any
     dataset_mode: str
+    padding: Optional[str] = None
 
     def __call__(self, examples):
         """
@@ -81,8 +83,8 @@ class MemoryTaskPreprocessor:
                     qs_out.append(q)
                     ans_out.append(a)
             
-            oracle_pref = self.tokenizer(oracle_prefixes, truncation=True, max_length=max_length, add_special_tokens=True)
-            memory_pref = self.tokenizer(memory_prefixes, truncation=True, max_length=max_length, add_special_tokens=True)
+            oracle_pref = self.tokenizer(oracle_prefixes, truncation=True, max_length=max_length, add_special_tokens=True, padding=self.padding)
+            memory_pref = self.tokenizer(memory_prefixes, truncation=True, max_length=max_length, add_special_tokens=True, padding=self.padding)
             oracle_pref_lens = [len(x) for x in oracle_pref.input_ids]
             memory_pref_lens = [len(x) for x in memory_pref.input_ids]
             
@@ -112,16 +114,16 @@ class MemoryTaskPreprocessor:
                 for q in qs
             ]
             
-            oracle_pref = self.tokenizer(oracle_prefixes, truncation=True, max_length=max_length, add_special_tokens=True)
-            memory_pref = self.tokenizer(memory_prefixes, truncation=True, max_length=max_length, add_special_tokens=True)
+            oracle_pref = self.tokenizer(oracle_prefixes, truncation=True, max_length=max_length, add_special_tokens=True, padding=self.padding)
+            memory_pref = self.tokenizer(memory_prefixes, truncation=True, max_length=max_length, add_special_tokens=True, padding=self.padding)
             
             oracle_pref_lens = [len(x) for x in oracle_pref.input_ids]
             memory_pref_lens = [len(x) for x in memory_pref.input_ids]
         else:
             raise RuntimeError(f"Unrecognized dataset_mode: {self.dataset_mode}")
     
-        oracle = self.tokenizer(oracle_texts, truncation=True, max_length=max_length, add_special_tokens=True)
-        memory = self.tokenizer(memory_texts, truncation=True, max_length=max_length, add_special_tokens=True)
+        oracle = self.tokenizer(oracle_texts, truncation=True, max_length=max_length, add_special_tokens=True, padding=self.padding)
+        memory = self.tokenizer(memory_texts, truncation=True, max_length=max_length, add_special_tokens=True, padding=self.padding)
     
         return {
             "oracle_input_ids": oracle.input_ids,
