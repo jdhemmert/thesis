@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import os
 import hydra
 from omegaconf import DictConfig
 import torch
@@ -131,8 +132,9 @@ class BaseModelLoader(ABC):
         from peft import PeftModel
         if self.adapter_path:
             # Load existing adapter from path (e.g. for memory training on top of finetuned model)
-            print(f"Loading PEFT adapter from {self.adapter_path}...")
-            model = PeftModel.from_pretrained(model, self.adapter_path, is_trainable=True)
+            abs_adapter_path = os.path.abspath(self.adapter_path)
+            print(f"Loading PEFT adapter from {abs_adapter_path}...")
+            model = PeftModel.from_pretrained(model, abs_adapter_path, is_trainable=True)
             model.print_trainable_parameters()
         elif self.adapter_config:
             # Initialize new adapter
