@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import evaluate
 
+import hydra
 import torch
 import torch.nn.functional as F
 import datasets
@@ -67,19 +68,33 @@ class TrainMemoryTask:
             else:
                 dataset = dataset.select(range(self.config.sample_n))
 
-        # If we are in attributes mode, we MUST remove original columns because 
-        # the number of rows changes (expansion), and datasets.map will fail 
-        # if we try to keep columns that don't match the new row count.
-        if self.dataset_config.dataset_mode == "attributes" or self.config.extrinsic_validation.frequency == ExtrinsicValidationFrequency.NEVER:
+        using_new_path = (
+            getattr(dataset_config, "parser", None) is not None
+            and getattr(dataset_config, "biography_task", None) is not None
+        )
+
+        if using_new_path:
+            parser = hydra.utils.instantiate(dataset_config.parser)
+            biography_task = hydra.utils.instantiate(dataset_config.biography_task)
+            # New path always removes original columns: the biography task may
+            # expand rows and all needed fields are emitted by the preprocessor.
             remove_columns = original_columns
         else:
-            remove_columns = None
+            parser = None
+            biography_task = None
+            # Legacy path: remove columns only when row count may change.
+            if self.dataset_config.dataset_mode == "attributes" or self.config.extrinsic_validation.frequency == ExtrinsicValidationFrequency.NEVER:
+                remove_columns = original_columns
+            else:
+                remove_columns = None
 
         preprocessor = MemoryTaskPreprocessor(
             tokenizer=tokenizer,
             max_length=self.config.max_length,
             prompts=self.prompts,
-            dataset_mode=self.dataset_config.dataset_mode
+            dataset_mode=self.dataset_config.dataset_mode,
+            parser=parser,
+            biography_task=biography_task,
         )
 
         tokenized_dataset = dataset.map(

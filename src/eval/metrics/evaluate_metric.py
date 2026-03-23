@@ -15,6 +15,7 @@ class EvaluateMetricConfig:
     sample_count: int = 10
     log_predictions: bool = False
     extra_kwargs: dict = field(default_factory=lambda: { })
+    generation_input_key: str = "memory_input_ids"  # column used as generation prompt; set to eval_memory_input_ids for cloze tasks
 
 class EvaluateMetric(BaseMetric):
     """
@@ -35,7 +36,9 @@ class EvaluateMetric(BaseMetric):
         This includes tokenizing, extracting answers, and questions.
         """
         print(f"Preprocessing evaluation dataset for EvaluateMetric({self.config.metric_name})...")
-        required_cols = ["memory_input_ids", "memory_attention_mask", "answer", "question"]
+        input_key = self.config.generation_input_key
+        attn_key = input_key.replace("input_ids", "attention_mask")
+        required_cols = [input_key, attn_key, "answer", "question"]
         if not all(col in eval_dataset.column_names for col in required_cols):
             raise ValueError(f"Required columns {required_cols} not found in dataset: {eval_dataset.column_names}.")
 
@@ -45,16 +48,16 @@ class EvaluateMetric(BaseMetric):
             "answer": [],
             "question": []
         }
-        
+
         dataset_size = len(eval_dataset)
         sample_indices = list(range(dataset_size))
         if self.config.sample_count < dataset_size:
             sample_indices = random.sample(sample_indices, self.config.sample_count)
-        
+
         for idx in sample_indices:
             example = eval_dataset[idx]
-            precomputed["input_ids"].append(example['memory_input_ids'])
-            precomputed["attention_mask"].append(example['memory_attention_mask'])
+            precomputed["input_ids"].append(example[input_key])
+            precomputed["attention_mask"].append(example[attn_key])
             precomputed["answer"].append(example["answer"])
             if "question" in example:
                 precomputed["question"].append(example["question"])

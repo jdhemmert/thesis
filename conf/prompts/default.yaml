@@ -1,3 +1,4 @@
 contextual_qa_training: "Biography: {biography}\nQuestion: {question}\nAnswer: {answer}"
 contextual_qa_generation: "Biography: {biography}\nQuestion: {question}\nAnswer:"
+direct_qa_training: "Question: {question}\nAnswer: {answer}"
 direct_qa_generation: "Question: {question}\nAnswer:"
