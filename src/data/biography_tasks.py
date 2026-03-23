@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 from src.data.parsers import ParsedBiography
+from src.data.masking import AttributeMasker, Masker
 
 
 @dataclass
@@ -40,6 +41,13 @@ _QA_PROMPTS = TaskPromptConfig(
     contextual_generation="Biography: {biography}\nQuestion: {question}\nAnswer:",
     direct_training="Question: {question}\nAnswer: {answer}",
     direct_generation="Question: {question}\nAnswer:",
+)
+
+_CLOZE_PROMPTS = TaskPromptConfig(
+    contextual_training="Biography: {biography}\nFill in the blanks: {masked_biography}\nAnswer: {spans}",
+    contextual_generation="Biography: {biography}\nFill in the blanks: {masked_biography}\nAnswer:",
+    direct_training="Fill in the blanks: {masked_biography}\nAnswer: {spans}",
+    direct_generation="Fill in the blanks: {masked_biography}\nAnswer:",
 )
 
 
@@ -94,5 +102,51 @@ class QABiographyTask(BiographyTask):
                 question=q,
                 answer=a,
                 eval_question_text=p.direct_generation.format(question=q),
+            ))
+        return pairs
+
+
+class ClozeBiographyTask(BiographyTask):
+    """
+    Biography cloze task: oracle sees full bio + masked bio, memory sees masked bio only.
+
+    For each QA pair in the parsed biography, attempts to mask the answer value in
+    the biography text. Pairs where the value cannot be located are skipped.
+
+    Training objective: KL between oracle and memory at the span answer positions.
+    Extrinsic evaluation: QA-format generation prompt stored in eval_question_text,
+    using the direct_generation template from _QA_PROMPTS so it matches the format
+    the base model expects for question answering.
+    """
+
+    def __init__(self, masker: Masker = None, prompts=None):
+        self.masker = masker if masker is not None else AttributeMasker()
+        self.prompts = _resolve_prompts(prompts, _CLOZE_PROMPTS)
+
+    def build_pairs(self, parsed: ParsedBiography) -> list:
+        p = self.prompts
+        pairs = []
+        for q, a in parsed.qa_pairs:
+            masked_bio, found = self.masker.mask_one(parsed.biography, a)
+            if not found:
+                continue
+
+            pairs.append(OracleMemoryPair(
+                oracle_text=p.contextual_training.format(
+                    biography=parsed.biography,
+                    masked_biography=masked_bio,
+                    spans=a),
+                memory_text=p.direct_training.format(
+                    masked_biography=masked_bio,
+                    spans=a),
+                oracle_prefix=p.contextual_generation.format(
+                    biography=parsed.biography,
+                    masked_biography=masked_bio),
+                memory_prefix=p.direct_generation.format(
+                    masked_biography=masked_bio),
+                biography=parsed.biography,
+                question=q,
+                answer=a,
+                eval_question_text=_QA_PROMPTS.direct_generation.format(question=q),
             ))
         return pairs

@@ -1,0 +1,11 @@
+# @package dataset
+path: "data/biography_attributes.jsonl"
+test_split_ratio: 0.125
+physical_batch_size: 4
+accumulation_steps: 1
+parser:
+  _target_: src.data.parsers.AttributesDataParser
+biography_task:
+  _target_: src.data.biography_tasks.ClozeBiographyTask
+  masker:
+    _target_: src.data.masking.AttributeMasker
