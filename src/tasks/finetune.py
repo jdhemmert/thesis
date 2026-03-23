@@ -135,6 +135,10 @@ class FinetuneTask:
         trainer.save_model()
         trainer.save_metrics("train", results.metrics)
         
+        print(f"Saving final model and tokenizer to {cwd}...")
+        model.save_pretrained(cwd)
+        tokenizer.save_pretrained(cwd)
+        
         with open(f"{cwd}/eval_log.json", "w") as fout:
             json.dump(trainer.state.log_history, fout)
         print("Finetuning complete.")
