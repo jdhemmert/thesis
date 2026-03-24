@@ -1,4 +1,3 @@
-_target_: peft.LoraConfig
 task_type: CAUSAL_LM
 r: 16
 lora_alpha: 32

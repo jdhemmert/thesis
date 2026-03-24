@@ -1,13 +1,13 @@
 from abc import ABC, abstractmethod
 import os
-import hydra
 from omegaconf import DictConfig
 import torch
 from typing import Dict, Type, Optional, Tuple, Any
 from enum import Enum
 
 from transformers import AutoTokenizer, AutoModelForCausalLM, PreTrainedModel, PreTrainedTokenizer, LlamaConfig
-from peft import get_peft_model, PeftConfig
+from omegaconf import OmegaConf, DictConfig as OmegaDictConfig
+from peft import get_peft_model, LoraConfig
 
 
 import time
@@ -138,7 +138,8 @@ class BaseModelLoader(ABC):
             model.print_trainable_parameters()
         elif self.adapter_config:
             # Initialize new adapter
-            peft_config = hydra.utils.instantiate(self.adapter_config)
+            config_dict = OmegaConf.to_container(self.adapter_config, resolve=True)
+            peft_config = LoraConfig(**config_dict)
             model = get_peft_model(model, peft_config)
             print("PEFT adapter applied. Trainable parameters:")
             model.print_trainable_parameters()
