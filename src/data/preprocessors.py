@@ -8,7 +8,7 @@ class MemoryTaskPreprocessor:
     max_length: int
     prompts: Any
     dataset_mode: str = "qa"
-    padding: Optional[str] = None
+    padding: Optional[str] = "do_not_pad"
     parser: Optional[Any] = None       # DataParser instance (new path)
     biography_task: Optional[Any] = None  # BiographyTask instance (new path)
 
