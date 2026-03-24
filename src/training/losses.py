@@ -51,7 +51,7 @@ def teacher_only_distill_loss(
     T = float(temperature)
 
     total_kl = student_logits.new_tensor(0.0)
-    total_tok = student_logits.new_tensor(0.0)
+    total_tok = 0
 
     # KL aligned by answer index
     for i in range(bs):
@@ -73,9 +73,23 @@ def teacher_only_distill_loss(
         # KL per token: sum_v pT (log pT - log pS)
         kl_tok = (t_p * (t_logp - s_logp)).sum(dim=-1)  # [L]
         total_kl = total_kl + kl_tok.sum() * (T * T)
-        total_tok = total_tok + L
+        total_tok += L
 
-    loss = total_kl / torch.clamp(total_tok, min=1.0)
+    if total_tok == 0:
+        # No answer tokens found in any sample. This usually means oracle_prompt_len
+        # >= real_len for all examples (e.g. very long biographies truncate the answer
+        # out of the sequence). Log the first batch's values to aid diagnosis.
+        print(
+            f"[losses] WARNING: no answer tokens in batch (bs={bs}). "
+            f"oracle_prompt_len={oracle_prompt_len.tolist()}, "
+            f"oracle_real_lens={oracle_attention_mask.sum(-1).tolist()}, "
+            f"memory_prompt_len={memory_prompt_len.tolist()}, "
+            f"memory_real_lens={memory_attention_mask.sum(-1).tolist()}"
+        )
+        # Return zero loss that still participates in the graph so backward() doesn't crash.
+        return student_logits.sum() * 0.0
+
+    loss = total_kl / total_tok
 
     # Optional: ground-truth CE on student (answer-only)
     if use_gt_ce:
