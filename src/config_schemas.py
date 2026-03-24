@@ -2,7 +2,6 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from omegaconf import MISSING
-from peft import PeftConfig
 from hydra.core.config_store import ConfigStore
 
 from src.tasks.base import BaseTaskConfig
@@ -24,7 +23,7 @@ class ModelConfigGroup:
     """A container for the base model config and an optional adapter config."""
     architecture: ModelArchitecture = MISSING
     model_config: Optional[Any] = field(default=MISSING)
-    adapter_config: Optional[PeftConfig] = field(default=None)
+    adapter_config: Optional[Any] = field(default=None)
     adapter_path: Optional[str] = field(default=None)
     precision: str = field(default="bf16")
 

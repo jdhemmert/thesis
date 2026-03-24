@@ -1,6 +1,8 @@
+defaults:
+  - adapter_config: null
+
 architecture: STANDARD
 precision: bf16
-adapter_config: null
 
 model_config:
   _target_: transformers.LlamaConfig
