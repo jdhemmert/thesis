@@ -131,10 +131,27 @@ class BaseModelLoader(ABC):
         """
         from peft import PeftModel
         if self.adapter_path:
-            # Load existing adapter from path (e.g. for memory training on top of finetuned model)
+            # Load existing adapter from path (e.g. for memory training on top of finetuned model).
+            # We use get_peft_model + explicit state-dict loading rather than PeftModel.from_pretrained
+            # because some PEFT versions re-instantiate the base model from the adapter's
+            # base_model_name_or_path instead of using the provided model instance, which would
+            # replace AugmentedLlamaForCausalLM with a plain LlamaForCausalLM.
+            from peft import PeftConfig, get_peft_model, set_peft_model_state_dict
+            import safetensors.torch
+            import torch
+
             abs_adapter_path = os.path.abspath(self.adapter_path)
             print(f"Loading PEFT adapter from {abs_adapter_path}...")
-            model = PeftModel.from_pretrained(model, abs_adapter_path, is_trainable=True)
+            peft_config = PeftConfig.from_pretrained(abs_adapter_path)
+            model = get_peft_model(model, peft_config)
+
+            safetensors_path = os.path.join(abs_adapter_path, "adapter_model.safetensors")
+            bin_path = os.path.join(abs_adapter_path, "adapter_model.bin")
+            if os.path.exists(safetensors_path):
+                state_dict = safetensors.torch.load_file(safetensors_path)
+            else:
+                state_dict = torch.load(bin_path, map_location="cpu", weights_only=True)
+            set_peft_model_state_dict(model, state_dict)
             model.print_trainable_parameters()
         elif self.adapter_config:
             # Initialize new adapter
