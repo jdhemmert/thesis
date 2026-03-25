@@ -15,7 +15,7 @@ class EvaluateMetricConfig:
     sample_count: int = 10
     log_predictions: bool = False
     extra_kwargs: dict = field(default_factory=lambda: { })
-    generation_input_key: str = "memory_input_ids"  # column used as generation prompt; set to eval_memory_input_ids for cloze tasks
+    generation_input_key: str = "eval_memory_input_ids"  # column used as generation prompt (answer-free prefix)
 
 class EvaluateMetric(BaseMetric):
     """

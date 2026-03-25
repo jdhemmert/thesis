@@ -72,6 +72,7 @@ class MemoryTaskPreprocessor:
 
     def _call_legacy_path(self, examples):
         max_length = self.max_length
+        memory_pref = None
 
         if self.dataset_mode == "wikitext" or ("text" in examples and "question" not in examples):
             texts = examples["text"]
@@ -170,6 +171,8 @@ class MemoryTaskPreprocessor:
         oracle = self.tokenizer(oracle_texts, truncation=True, max_length=max_length, add_special_tokens=True, padding=self.padding)
         memory = self.tokenizer(memory_texts, truncation=True, max_length=max_length, add_special_tokens=True, padding=self.padding)
 
+        eval_memory = memory_pref if memory_pref is not None else memory
+
         return {
             "oracle_input_ids": oracle.input_ids,
             "oracle_attention_mask": oracle.attention_mask,
@@ -177,6 +180,8 @@ class MemoryTaskPreprocessor:
             "memory_attention_mask": memory.attention_mask,
             "oracle_prompt_len": oracle_pref_lens,
             "memory_prompt_len": memory_pref_lens,
+            "eval_memory_input_ids": eval_memory.input_ids,
+            "eval_memory_attention_mask": eval_memory.attention_mask,
             "biography": bios,
             "question": qs,
             "answer": ans,
