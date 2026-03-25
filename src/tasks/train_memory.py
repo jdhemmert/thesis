@@ -151,8 +151,7 @@ class TrainMemoryTask:
         if self.config.trainable_strategy == "soft_prompt_only":
             print("Freezing base model, training soft prompt only.")
             for name, param in model.named_parameters():
-                if "virtual_prompt" not in name:
-                    param.requires_grad = False
+                param.requires_grad = "virtual_prompt" in name
 
         # TODO: add catch-all TrainingArgument config dict
         training_args = TrainingArguments(
