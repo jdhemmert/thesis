@@ -10,19 +10,16 @@ def _answer_pred_slice(logits, prompt_len, attn_mask):
       token at position j is predicted by logits at position j-1.
     If answer starts at token index prompt_len, then predictions start at (prompt_len-1).
 
-    logits: [seq, vocab]
-    prompt_len: int
-    attn_mask: [seq] with 1 for real tokens
+    logits: [seq, vocab]  where seq may be larger than attn_mask if virtual tokens are prepended
+    prompt_len: int  (in original token space, not counting virtual tokens)
+    attn_mask: [orig_seq] with 1 for real tokens
     """
-    seq = logits.size(0)
-    # last real token index = attn_mask.sum()-1
+    # Virtual tokens prepended to the input shift all logit positions.
+    # Infer the offset from the size difference between logits and attn_mask.
+    virtual_offset = logits.size(0) - attn_mask.size(0)
     real_len = int(attn_mask.sum().item())
-    # Answer token indices are [prompt_len, real_len-1]
-    # Prediction positions for those tokens are [prompt_len-1, real_len-2]
-    start = max(prompt_len - 1, 0)
-    end = max(real_len - 1, 0)  # exclusive for logits positions predicting up to token real_len-1 -> logits real_len-2
-    # prediction positions are [start, end) where end = real_len-1
-    # because logits index real_len-2 is last predictor
+    start = max(virtual_offset + prompt_len - 1, 0)
+    end = max(virtual_offset + real_len - 1, 0)
     return logits[start:end, :]
 
 

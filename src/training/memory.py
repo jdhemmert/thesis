@@ -133,13 +133,13 @@ class MemoryBankTrainer(Trainer):
     
         def _answer_pred_slice(logits_1ex: torch.Tensor, prompt_len: int, attn_mask_1ex: torch.Tensor):
             """
-            logits_1ex: [seq, vocab]
-            Answer token indices: [prompt_len, real_len-1]
-            Predicted by logits positions: [prompt_len-1, real_len-2]
+            logits_1ex: [seq, vocab]  where seq may exceed attn_mask length if virtual tokens were prepended
+            prompt_len: int  (in original token space, not counting virtual tokens)
             """
+            virtual_offset = logits_1ex.size(0) - attn_mask_1ex.size(0)
             real_len = _real_len(attn_mask_1ex)
-            start = max(prompt_len - 1, 0)
-            end = max(real_len - 1, 0)  # exclusive
+            start = max(virtual_offset + prompt_len - 1, 0)
+            end = max(virtual_offset + real_len - 1, 0)
             if end <= start:
                 return logits_1ex.new_zeros((0, logits_1ex.size(-1)))
             return logits_1ex[start:end, :]
