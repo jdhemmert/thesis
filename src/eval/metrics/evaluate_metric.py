@@ -88,6 +88,8 @@ class EvaluateMetric(BaseMetric):
     
         model.eval()
     
+        has_virtual_tokens = hasattr(model, "virtual_prompt") or (hasattr(model, "model") and hasattr(model.model, "virtual_prompt"))
+
         for i in range(len(self.precomputed_data["student_input_ids"])):
             student_input_ids = torch.tensor([self.precomputed_data["student_input_ids"][i]]).to(model.device)
             student_attention_mask = torch.tensor([self.precomputed_data["student_attention_mask"][i]]).to(model.device)
@@ -101,7 +103,7 @@ class EvaluateMetric(BaseMetric):
                     max_new_tokens=50,
                     pad_token_id=self.tokenizer.pad_token_id,
                     eos_token_id=self.tokenizer.eos_token_id,
-                    use_virtual_tokens=False,
+                    **({"use_virtual_tokens": False} if has_virtual_tokens else {}),
                 )
                 student_ids = model.generate(
                     input_ids=student_input_ids,
@@ -109,7 +111,7 @@ class EvaluateMetric(BaseMetric):
                     max_new_tokens=50,
                     pad_token_id=self.tokenizer.pad_token_id,
                     eos_token_id=self.tokenizer.eos_token_id,
-                    use_virtual_tokens=True,
+                    **({"use_virtual_tokens": True} if has_virtual_tokens else {}),
                 )
 
             oracle_pred_ids = oracle_ids[0][len(oracle_input_ids[0]):]
@@ -123,7 +125,6 @@ class EvaluateMetric(BaseMetric):
             all_labels.append(self.precomputed_data["answer"][i])
             all_questions_for_log.append(self.precomputed_data["question"][i])
     
-        # Compute metrics on the student predictions
         metric_scores = self.metric_evaluator.compute(
             predictions=student_preds,
             references=all_labels,
@@ -135,7 +136,6 @@ class EvaluateMetric(BaseMetric):
     
         print(f"Extrinsic EvaluateMetric({self.config.metric_name}) Scores: {metric_scores}")
     
-        # ---------- Logging ----------
         if state.is_world_process_zero and self.config.log_predictions:
             log_file_path = os.path.join(self.output_dir, f"prediction_log.epoch_{int(state.epoch)}.jsonl")
             print(f"Logging predictions to {log_file_path}")

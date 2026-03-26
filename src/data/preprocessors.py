@@ -17,10 +17,6 @@ class MemoryTaskPreprocessor:
             return self._call_new_path(examples)
         return self._call_legacy_path(examples)
 
-    # ------------------------------------------------------------------
-    # New path: DataParser + BiographyTask composition
-    # ------------------------------------------------------------------
-
     def _call_new_path(self, examples):
         batch_size = len(next(iter(examples.values())))
 
@@ -67,10 +63,6 @@ class MemoryTaskPreprocessor:
             "answer": ans,
         }
         return result
-
-    # ------------------------------------------------------------------
-    # Legacy path: dataset_mode string branching (unchanged)
-    # ------------------------------------------------------------------
 
     def _call_legacy_path(self, examples):
         max_length = self.max_length

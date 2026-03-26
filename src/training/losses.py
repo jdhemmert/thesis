@@ -68,7 +68,7 @@ def teacher_only_distill_loss(
         t_p = t_logp.exp()
 
         # KL per token: sum_v pT (log pT - log pS)
-        kl_tok = (t_p * (t_logp - s_logp)).sum(dim=-1)  # [L]
+        kl_tok = (t_p * (t_logp - s_logp)).sum(dim=-1)
         total_kl = total_kl + kl_tok.sum() * (T * T)
         total_tok += L
 
@@ -88,10 +88,8 @@ def teacher_only_distill_loss(
 
     loss = total_kl / total_tok
 
-    # Optional: ground-truth CE on student (answer-only)
     if use_gt_ce:
         assert memory_labels is not None, "memory_labels required when use_gt_ce=True"
-        # standard CausalLM CE over answer-only labels
         shift_logits = student_logits[:, :-1, :].contiguous()
         shift_labels = memory_labels[:, 1:].contiguous()
         ce = F.cross_entropy(

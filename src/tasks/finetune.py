@@ -9,6 +9,7 @@ from transformers import Trainer, TrainingArguments, DataCollatorForLanguageMode
 from src.tasks.base import BaseTaskConfig, register_task
 from src.models.base import ModelFactory
 from src.data.preprocessors import MemoryTaskPreprocessor
+from src.training.callbacks import ExtrinsicValidationCallback, ExtrinsicValidationFrequency, ExtrinsicValidationConfig
 
 @register_task(name="finetune", group="task")
 @dataclass
@@ -24,6 +25,7 @@ class FinetuneTaskConfig(BaseTaskConfig):
     learning_rate: float = 2e-4
     sample_n: Optional[int] = None
     save_strategy: str = "steps"
+    extrinsic_validation: ExtrinsicValidationConfig = field(default_factory=ExtrinsicValidationConfig)
 
 
 class FinetuneTask:
@@ -55,9 +57,9 @@ class FinetuneTask:
             for i in range(len(input_ids)):
                 lab = list(input_ids[i])
                 p_len = prompt_lens[i]
-                
-                # Mask the prompt (Bio + Question) AND the padding tokens
-                # Loss should only be calculated on the Answer tokens
+
+                # Mask the prompt (Bio + Question) AND padding tokens;
+                # loss is computed only on answer tokens.
                 for j in range(len(lab)):
                     if j < p_len or attention_mask[i][j] == 0:
                         lab[j] = -100
@@ -69,11 +71,17 @@ class FinetuneTask:
                 "labels": labels,
                 "biography": expanded["biography"],
                 "question": expanded["question"],
-                "answer": expanded["answer"]
+                "answer": expanded["answer"],
+                "eval_oracle_input_ids":      expanded["eval_oracle_input_ids"],
+                "eval_oracle_attention_mask": expanded["eval_oracle_attention_mask"],
+                "eval_memory_input_ids":      expanded["eval_memory_input_ids"],
+                "eval_memory_attention_mask": expanded["eval_memory_attention_mask"],
+                "memory_input_ids":           expanded["memory_input_ids"],
+                "memory_attention_mask":      expanded["memory_attention_mask"],
             }
 
-        # Since finetune_preprocess explicitly returns the metadata we care about, 
-        # it is safe to remove the raw input columns.
+        # finetune_preprocess returns all needed columns explicitly, so it's
+        # safe to drop the raw input columns.
         remove_columns = original_columns
 
         tokenized_dataset = dataset.map(
@@ -102,6 +110,17 @@ class FinetuneTask:
         if hasattr(model, "print_trainable_parameters"):
             model.print_trainable_parameters()
 
+        callbacks = []
+        if self.config.extrinsic_validation.frequency != ExtrinsicValidationFrequency.NEVER:
+            import src.eval.metrics.loaders  # registers MetricFactory loaders
+            callbacks.append(ExtrinsicValidationCallback(
+                self.config.extrinsic_validation,
+                tokenized_dataset,
+                tokenizer,
+                cwd,
+                self.prompts,
+            ))
+
         split_dataset = tokenized_dataset.train_test_split(test_size=cfg.dataset.test_split_ratio, seed=self.config.seed)
         train_dataset = split_dataset["train"]
         eval_dataset = split_dataset["test"]
@@ -128,6 +147,7 @@ class FinetuneTask:
             eval_dataset=eval_dataset,
             processing_class=tokenizer,
             data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
+            callbacks=callbacks,
         )
 
         print("Starting finetuning...")
