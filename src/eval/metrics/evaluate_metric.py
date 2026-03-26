@@ -28,7 +28,7 @@ class EvaluateMetric(BaseMetric):
 
         self.metric_evaluator = evaluate.load(self.config.metric_name)
         self.precomputed_data = self._preprocess_eval_dataset(eval_dataset)
-        print(f"EvaluateMetric({self.config.metric_name}) initialized with {len(self.precomputed_data['input_ids'])} precomputed examples.")
+        print(f"EvaluateMetric({self.config.metric_name}) initialized with {len(self.precomputed_data['student_input_ids'])} precomputed examples.")
 
     def _preprocess_eval_dataset(self, eval_dataset: Any) -> Dict[str, List[Any]]:
         """
@@ -36,17 +36,21 @@ class EvaluateMetric(BaseMetric):
         This includes tokenizing, extracting answers, and questions.
         """
         print(f"Preprocessing evaluation dataset for EvaluateMetric({self.config.metric_name})...")
-        input_key = self.config.generation_input_key
-        attn_key = input_key.replace("input_ids", "attention_mask")
-        required_cols = [input_key, attn_key, "answer", "question"]
+        student_key = self.config.generation_input_key
+        student_attn_key = student_key.replace("input_ids", "attention_mask")
+        oracle_key = "eval_oracle_input_ids"
+        oracle_attn_key = "eval_oracle_attention_mask"
+        required_cols = [student_key, student_attn_key, oracle_key, oracle_attn_key, "answer", "question"]
         if not all(col in eval_dataset.column_names for col in required_cols):
             raise ValueError(f"Required columns {required_cols} not found in dataset: {eval_dataset.column_names}.")
 
         precomputed = {
-            "input_ids": [],
-            "attention_mask": [],
+            "student_input_ids": [],
+            "student_attention_mask": [],
+            "oracle_input_ids": [],
+            "oracle_attention_mask": [],
             "answer": [],
-            "question": []
+            "question": [],
         }
 
         dataset_size = len(eval_dataset)
@@ -56,13 +60,12 @@ class EvaluateMetric(BaseMetric):
 
         for idx in sample_indices:
             example = eval_dataset[idx]
-            precomputed["input_ids"].append(example[input_key])
-            precomputed["attention_mask"].append(example[attn_key])
+            precomputed["student_input_ids"].append(example[student_key])
+            precomputed["student_attention_mask"].append(example[student_attn_key])
+            precomputed["oracle_input_ids"].append(example[oracle_key])
+            precomputed["oracle_attention_mask"].append(example[oracle_attn_key])
             precomputed["answer"].append(example["answer"])
-            if "question" in example:
-                precomputed["question"].append(example["question"])
-            else:
-                precomputed["question"].append("N/A")
+            precomputed["question"].append(example.get("question", "N/A"))
 
         return precomputed
 
@@ -85,32 +88,32 @@ class EvaluateMetric(BaseMetric):
     
         model.eval()
     
-        for i in range(len(self.precomputed_data["input_ids"])):
-            input_ids = torch.tensor([self.precomputed_data["input_ids"][i]]).to(model.device)
-            attention_mask = torch.tensor([self.precomputed_data["attention_mask"][i]]).to(model.device)
-    
+        for i in range(len(self.precomputed_data["student_input_ids"])):
+            student_input_ids = torch.tensor([self.precomputed_data["student_input_ids"][i]]).to(model.device)
+            student_attention_mask = torch.tensor([self.precomputed_data["student_attention_mask"][i]]).to(model.device)
+            oracle_input_ids = torch.tensor([self.precomputed_data["oracle_input_ids"][i]]).to(model.device)
+            oracle_attention_mask = torch.tensor([self.precomputed_data["oracle_attention_mask"][i]]).to(model.device)
+
             with torch.no_grad():
                 oracle_ids = model.generate(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask,
+                    input_ids=oracle_input_ids,
+                    attention_mask=oracle_attention_mask,
                     max_new_tokens=50,
                     pad_token_id=self.tokenizer.pad_token_id,
                     eos_token_id=self.tokenizer.eos_token_id,
                     use_virtual_tokens=False,
                 )
                 student_ids = model.generate(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask,
+                    input_ids=student_input_ids,
+                    attention_mask=student_attention_mask,
                     max_new_tokens=50,
                     pad_token_id=self.tokenizer.pad_token_id,
                     eos_token_id=self.tokenizer.eos_token_id,
                     use_virtual_tokens=True,
                 )
-    
-            num_input_tokens = len(input_ids[0])
-    
-            oracle_pred_ids = oracle_ids[0][num_input_tokens:]
-            student_pred_ids = student_ids[0][num_input_tokens:]
+
+            oracle_pred_ids = oracle_ids[0][len(oracle_input_ids[0]):]
+            student_pred_ids = student_ids[0][len(student_input_ids[0]):]
     
             oracle_text = self.tokenizer.decode(oracle_pred_ids, skip_special_tokens=True).strip()
             student_text = self.tokenizer.decode(student_pred_ids, skip_special_tokens=True).strip()

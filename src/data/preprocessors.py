@@ -58,6 +58,8 @@ class MemoryTaskPreprocessor:
             "memory_attention_mask": memory.attention_mask,
             "oracle_prompt_len": [len(x) for x in oracle_pref.input_ids],
             "memory_prompt_len": [len(x) for x in memory_pref.input_ids],
+            "eval_oracle_input_ids": oracle_pref.input_ids,
+            "eval_oracle_attention_mask": oracle_pref.attention_mask,
             "eval_memory_input_ids": eval_pref.input_ids,
             "eval_memory_attention_mask": eval_pref.attention_mask,
             "biography": bios,
@@ -72,6 +74,7 @@ class MemoryTaskPreprocessor:
 
     def _call_legacy_path(self, examples):
         max_length = self.max_length
+        oracle_pref = None
         memory_pref = None
 
         if self.dataset_mode == "wikitext" or ("text" in examples and "question" not in examples):
@@ -172,6 +175,7 @@ class MemoryTaskPreprocessor:
         memory = self.tokenizer(memory_texts, truncation=True, max_length=max_length, add_special_tokens=True, padding=self.padding)
 
         eval_memory = memory_pref if memory_pref is not None else memory
+        eval_oracle = oracle_pref if oracle_pref is not None else oracle
 
         return {
             "oracle_input_ids": oracle.input_ids,
@@ -180,6 +184,8 @@ class MemoryTaskPreprocessor:
             "memory_attention_mask": memory.attention_mask,
             "oracle_prompt_len": oracle_pref_lens,
             "memory_prompt_len": memory_pref_lens,
+            "eval_oracle_input_ids": eval_oracle.input_ids,
+            "eval_oracle_attention_mask": eval_oracle.attention_mask,
             "eval_memory_input_ids": eval_memory.input_ids,
             "eval_memory_attention_mask": eval_memory.attention_mask,
             "biography": bios,
