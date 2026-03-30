@@ -112,20 +112,20 @@ class FinetuneTask:
         if hasattr(model, "print_trainable_parameters"):
             model.print_trainable_parameters()
 
+        split_dataset = tokenized_dataset.train_test_split(test_size=cfg.dataset.test_split_ratio, seed=self.config.seed)
+        train_dataset = split_dataset["train"]
+        eval_dataset = split_dataset["test"]
+
         callbacks = []
         if self.config.extrinsic_validation.frequency != ExtrinsicValidationFrequency.NEVER:
             import src.eval.metrics.loaders  # registers MetricFactory loaders
             callbacks.append(ExtrinsicValidationCallback(
                 self.config.extrinsic_validation,
-                tokenized_dataset,
+                eval_dataset,
                 tokenizer,
                 cwd,
                 self.prompts,
             ))
-
-        split_dataset = tokenized_dataset.train_test_split(test_size=cfg.dataset.test_split_ratio, seed=self.config.seed)
-        train_dataset = split_dataset["train"]
-        eval_dataset = split_dataset["test"]
 
         training_args = TrainingArguments(
             output_dir=f"{cwd}/",
