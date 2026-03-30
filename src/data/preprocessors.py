@@ -52,8 +52,8 @@ class MemoryTaskPreprocessor:
             "oracle_attention_mask": oracle.attention_mask,
             "memory_input_ids": memory.input_ids,
             "memory_attention_mask": memory.attention_mask,
-            "oracle_prompt_len": [len(x) for x in oracle_pref.input_ids],
-            "memory_prompt_len": [len(x) for x in memory_pref.input_ids],
+            "oracle_prompt_len": [sum(m) for m in oracle_pref.attention_mask],
+            "memory_prompt_len": [sum(m) for m in memory_pref.attention_mask],
             "eval_oracle_input_ids": oracle_pref.input_ids,
             "eval_oracle_attention_mask": oracle_pref.attention_mask,
             "eval_memory_input_ids": eval_pref.input_ids,
@@ -129,8 +129,8 @@ class MemoryTaskPreprocessor:
 
             oracle_pref = self.tokenizer(oracle_prefixes, truncation=True, max_length=max_length, add_special_tokens=True, padding=self.padding)
             memory_pref = self.tokenizer(memory_prefixes, truncation=True, max_length=max_length, add_special_tokens=True, padding=self.padding)
-            oracle_pref_lens = [len(x) for x in oracle_pref.input_ids]
-            memory_pref_lens = [len(x) for x in memory_pref.input_ids]
+            oracle_pref_lens = [sum(m) for m in oracle_pref.attention_mask]
+            memory_pref_lens = [sum(m) for m in memory_pref.attention_mask]
             bios, qs, ans = bios_out, qs_out, ans_out
 
         elif self.dataset_mode == "qa":
@@ -157,8 +157,8 @@ class MemoryTaskPreprocessor:
 
             oracle_pref = self.tokenizer(oracle_prefixes, truncation=True, max_length=max_length, add_special_tokens=True, padding=self.padding)
             memory_pref = self.tokenizer(memory_prefixes, truncation=True, max_length=max_length, add_special_tokens=True, padding=self.padding)
-            oracle_pref_lens = [len(x) for x in oracle_pref.input_ids]
-            memory_pref_lens = [len(x) for x in memory_pref.input_ids]
+            oracle_pref_lens = [sum(m) for m in oracle_pref.attention_mask]
+            memory_pref_lens = [sum(m) for m in memory_pref.attention_mask]
 
         else:
             raise RuntimeError(f"Unrecognized dataset_mode: {self.dataset_mode}")
