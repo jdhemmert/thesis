@@ -25,7 +25,9 @@ class FinetuneTaskConfig(BaseTaskConfig):
     learning_rate: float = 2e-4
     sample_n: Optional[int] = None
     save_strategy: str = "steps"
-    extrinsic_validation: ExtrinsicValidationConfig = field(default_factory=ExtrinsicValidationConfig)
+    extrinsic_validation: ExtrinsicValidationConfig = field(
+        default_factory=lambda: ExtrinsicValidationConfig(generation_input_key="eval_oracle_input_ids")
+    )
 
 
 class FinetuneTask:
