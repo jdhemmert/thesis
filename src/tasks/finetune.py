@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 from omegaconf import DictConfig
 from datasets import load_dataset
-from transformers import Trainer, TrainingArguments, DataCollatorForLanguageModeling, AutoTokenizer, AutoModelForCausalLM
+from transformers import Trainer, TrainingArguments, default_data_collator, AutoTokenizer, AutoModelForCausalLM
 
 from src.tasks.base import BaseTaskConfig, register_task
 from src.models.base import ModelFactory
@@ -148,7 +148,7 @@ class FinetuneTask:
             train_dataset=train_dataset,
             eval_dataset=eval_dataset,
             processing_class=tokenizer,
-            data_collator=DataCollatorForLanguageModeling(tokenizer, mlm=False),
+            data_collator=default_data_collator,
             callbacks=callbacks,
         )
 
