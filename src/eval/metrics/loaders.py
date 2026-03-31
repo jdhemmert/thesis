@@ -16,7 +16,7 @@ class EvaluateMetricLoader(BaseMetricLoader):
 
     def load(self) -> BaseMetric:
         return EvaluateMetric(
-            config=self.metric_config,
+            config=self.metric_config if self.metric_config is not None else EvaluateMetricConfig(),
             tokenizer=self.tokenizer,
             eval_dataset=self.eval_dataset,
             output_dir=self.output_dir,

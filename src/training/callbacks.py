@@ -49,7 +49,10 @@ class ExtrinsicValidationCallback(TrainerCallback):
         self.prompt_config = prompt_config
 
         metric_config = self.config.metric_config
-        if self.config.generation_input_key is not None and metric_config is not None:
+        if metric_config is None:
+            from src.eval.metrics.evaluate_metric import EvaluateMetricConfig
+            metric_config = EvaluateMetricConfig()
+        if self.config.generation_input_key is not None:
             # Apply the task-level override so the metric generates from the correct
             # prompt format for this task (see ExtrinsicValidationConfig for details).
             metric_config.generation_input_key = self.config.generation_input_key
