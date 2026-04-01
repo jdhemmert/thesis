@@ -142,10 +142,22 @@ class EvaluateMetric(BaseMetric):
     
             with open(log_file_path, "w") as f:
                 for i in range(len(student_preds)):
+                    oracle_real_ids = [
+                        id_ for id_, m in zip(self.precomputed_data["oracle_input_ids"][i],
+                                              self.precomputed_data["oracle_attention_mask"][i])
+                        if m == 1
+                    ]
+                    student_real_ids = [
+                        id_ for id_, m in zip(self.precomputed_data["student_input_ids"][i],
+                                              self.precomputed_data["student_attention_mask"][i])
+                        if m == 1
+                    ]
                     log_entry = {
                         "question": all_questions_for_log[i],
                         "ground_truth": all_labels[i],
+                        "oracle_context": self.tokenizer.decode(oracle_real_ids, skip_special_tokens=True),
                         "oracle_prediction": oracle_preds[i],
+                        "student_context": self.tokenizer.decode(student_real_ids, skip_special_tokens=True),
                         "student_prediction": student_preds[i],
                     }
                     f.write(json.dumps(log_entry) + "\n")
