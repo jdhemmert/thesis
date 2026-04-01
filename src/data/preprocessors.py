@@ -119,8 +119,8 @@ class MemoryTaskPreprocessor:
                     if not a:
                         continue
                     q = q_tmpl.format(name=name, company1name=ex.get("company1name", ""))
-                    oracle_texts.append(self.prompts.contextual_qa_training.format(biography=bio_text, question=q, answer=a) + self.tokenizer.eos_token)
-                    memory_texts.append(self.prompts.direct_qa_training.format(question=q, answer=a) + self.tokenizer.eos_token)
+                    oracle_texts.append(self.prompts.contextual_qa_training.format(biography=bio_text, question=q, answer=a))
+                    memory_texts.append(self.prompts.direct_qa_training.format(question=q, answer=a))
                     oracle_prefixes.append(self.prompts.contextual_qa_generation.format(biography=bio_text, question=q))
                     memory_prefixes.append(self.prompts.direct_qa_generation.format(question=q))
                     bios_out.append(bio_text)
@@ -139,11 +139,11 @@ class MemoryTaskPreprocessor:
             ans  = examples["answer"]
 
             oracle_texts = [
-                self.prompts.contextual_qa_training.format(biography=b, question=q, answer=a) + self.tokenizer.eos_token
+                self.prompts.contextual_qa_training.format(biography=b, question=q, answer=a)
                 for b, q, a in zip(bios, qs, ans)
             ]
             memory_texts = [
-                self.prompts.direct_qa_training.format(question=q, answer=a) + self.tokenizer.eos_token
+                self.prompts.direct_qa_training.format(question=q, answer=a)
                 for q, a in zip(qs, ans)
             ]
             oracle_prefixes = [
