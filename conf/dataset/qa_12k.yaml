@@ -1,6 +1,6 @@
 # @package dataset
-path: "data/qa_finetune_dataset_12k.jsonl"
-dataset_mode: qa
+path: "data/qa_finetune_attributes.jsonl"
+dataset_mode: attributes
 test_split_ratio: 0.125
 streaming: false
 physical_batch_size: 4

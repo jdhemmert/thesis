@@ -4,6 +4,52 @@ import random
 import json
 import os
 
+# Biography sentence templates
+birth_date_templates = [
+    "{name} was born on {birth_date}.",
+    "{name}'s birthday is on {birth_date}.",
+    "On {birth_date}, {name} was born."
+]
+
+birth_city_templates = [
+    "{subject} spent {possessive} early years in {birth_city}.",
+    "{subject} is from {birth_city}.",
+    "{subject} grew up in {birth_city}."
+]
+
+college_templates = [
+    "{subject} attended {college}.",
+    "{subject} went to {college} for {possessive} higher education.",
+    "{subject} is a graduate of {college}."
+]
+
+major_templates = [
+    "{subject} studied {major}.",
+    "{subject} majored in {major}.",
+    "{subject} has a degree in {major}."
+]
+
+company_templates = [
+    "{subject} works at {company}.",
+    "{subject} is an employee of {company}.",
+    "{subject} is currently employed by {company}."
+]
+
+male_pronouns = {"subject": "he", "object": "him", "possessive": "his"}
+female_pronouns = {"subject": "she", "object": "her", "possessive": "her"}
+
+
+def generate_bio(entry):
+    pronouns = male_pronouns if entry["gender"] == "M" else female_pronouns
+    sentences = [
+        random.choice(birth_date_templates).format(name=entry['name'], birth_date=entry['birth_date'], **pronouns).capitalize(),
+        random.choice(birth_city_templates).format(birth_city=entry['birth_city'], **pronouns).capitalize(),
+        random.choice(college_templates).format(college=entry['college'], **pronouns).capitalize(),
+        random.choice(major_templates).format(major=entry['major'], **pronouns).capitalize(),
+        random.choice(company_templates).format(company=entry['company'], **pronouns).capitalize(),
+    ]
+    return " ".join(sentences)
+
 # state abbrev map - from https://gist.github.com/JeffPaine/3083347
 abbrev_to_state = {
     # https://en.wikipedia.org/wiki/List_of_states_and_territories_of_the_United_States#States.
@@ -205,6 +251,7 @@ def main():
                 "major":      majors.sample().major.item(),
                 "company":    companies.sample().company.item(),
             }
+            entry["biography"] = generate_bio(entry)
             fout.write(json.dumps(entry) + "\n")
 
     print("Generated biography_attributes.jsonl")
