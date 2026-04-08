@@ -42,11 +42,11 @@ female_pronouns = {"subject": "she", "object": "her", "possessive": "her"}
 def generate_bio(entry):
     pronouns = male_pronouns if entry["gender"] == "M" else female_pronouns
     sentences = [
-        random.choice(birth_date_templates).format(name=entry['name'], birth_date=entry['birth_date'], **pronouns).capitalize(),
-        random.choice(birth_city_templates).format(birth_city=entry['birth_city'], **pronouns).capitalize(),
-        random.choice(college_templates).format(college=entry['college'], **pronouns).capitalize(),
-        random.choice(major_templates).format(major=entry['major'], **pronouns).capitalize(),
-        random.choice(company_templates).format(company=entry['company'], **pronouns).capitalize(),
+        random.choice(birth_date_templates).format(name=entry['name'], birth_date=entry['birth_date'], **pronouns),
+        random.choice(birth_city_templates).format(birth_city=entry['birth_city'], **pronouns),
+        random.choice(college_templates).format(college=entry['college'], **pronouns),
+        random.choice(major_templates).format(major=entry['major'], **pronouns),
+        random.choice(company_templates).format(company=entry['company'], **pronouns),
     ]
     return " ".join(sentences)
 
@@ -240,7 +240,7 @@ def main():
     majors    = pd.read_csv("data/clean/majors.csv")
     companies = pd.read_csv("data/clean/companies.csv")
 
-    with open("data/biography_attributes.jsonl", "w") as fout:
+    with open("data/qa_bio_attributes.jsonl", "w") as fout:
         for record in records:
             entry = {
                 "name":       record["name"],
