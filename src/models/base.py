@@ -7,7 +7,8 @@ from enum import Enum
 
 from transformers import AutoTokenizer, AutoModelForCausalLM, PreTrainedModel, PreTrainedTokenizer, LlamaConfig
 from omegaconf import OmegaConf, DictConfig as OmegaDictConfig
-from peft import get_peft_model, LoraConfig
+from peft import get_peft_model, set_peft_model_state_dict, LoraConfig, PeftConfig
+import safetensors
 
 
 import time
@@ -136,9 +137,6 @@ class BaseModelLoader(ABC):
             # because some PEFT versions re-instantiate the base model from the adapter's
             # base_model_name_or_path instead of using the provided model instance, which would
             # replace AugmentedLlamaForCausalLM with a plain LlamaForCausalLM.
-            from peft import PeftConfig, get_peft_model, set_peft_model_state_dict
-            import safetensors.torch
-            import torch
 
             abs_adapter_path = os.path.abspath(self.adapter_path)
             print(f"Loading PEFT adapter from {abs_adapter_path}...")
