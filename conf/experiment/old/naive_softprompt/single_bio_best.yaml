@@ -1,0 +1,44 @@
+# @package _global_
+
+defaults:
+    - /adapter: qa_finetune
+    - /task/extrinsic_validation: rouge
+    - override /task: train_memory
+    - override /model: augmented_llama
+    - override /dataset: qa_12k
+    - override /hydra/sweeper: optuna
+    - _self_
+
+
+experiment_path: "naive_softprompt/single_bio/best"
+
+task:
+    sample_n: 1
+    num_train_epochs: 33
+
+    learning_rate: 0.00966894684401972
+    alpha: 0.9
+    temperature: 2.0
+
+model:
+    model_config:
+        virtual_token_count: 17
+
+# eval_ce_student_answer
+# best_params:
+#   task.num_train_epochs: 40
+#   task.learning_rate: 0.0024656348982207716
+#   task.alpha: 0.034916948178949886
+#   task.temperature: 1.0677646773714413
+#   model.model_config.virtual_token_count: 17
+# best_value: 0.49413013458251953
+
+# qa_finetune_ce
+# best_params:
+#   task.num_train_epochs: 33
+#   task.learning_rate: 0.00966894684401972
+#   task.alpha: 0.5033435312529714
+#   task.temperature: 1.8956594345253255
+#   model.model_config.virtual_token_count: 12
+# best_value: 1.405227857713516e-05
+

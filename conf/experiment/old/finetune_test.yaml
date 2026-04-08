@@ -1,0 +1,30 @@
+# @package _global_
+
+defaults:
+  - /task/extrinsic_validation: rouge
+  - override /task:  finetune
+  - override /dataset: qa_12k
+  - override /model: standard
+  - override /model/adapter_config: lora
+  - _self_
+
+
+experiment_path: finetune_test
+
+model:
+    model_config:
+        model_path: meta-llama/Llama-3.2-3B-Instruct
+task:
+    num_train_epochs: 3
+    sample_n: 200
+
+
+#hydra:
+#    mode: MULTIRUN
+#    sweep:
+#        subdir: ${model.model_config.model_path}_${task.sample_n}samples_${task.num_train_epochs}epochs
+#    sweeper:
+#        params:
+#            model.model_config.model_path: meta-llama/Llama-3.2-3B, meta-llama/Llama-3.2-3B-Instruct
+#            task.num_train_epochs: 1, 2, 3
+#            task.sample_n: 100, 200, 400
