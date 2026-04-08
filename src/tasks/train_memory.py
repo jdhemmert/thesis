@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Any
 import json
 import time
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -21,6 +22,7 @@ from src.models.base import ModelFactory
 from src.models.initializers import InitializerName, INITIALIZER_MAP
 from src.training.memory import MemoryBankTrainer, SelfDistillationDataCollator
 from src.data.preprocessors import MemoryTaskPreprocessor
+from src.utils.logs import load_eval_rows, extract_final_metric
 
 
 @register_task(name="train_memory", group="task")
@@ -197,31 +199,26 @@ class TrainMemoryTask:
         results = trainer.train()
         trainer.save_model()
         trainer.save_metrics("eval", results.metrics)
-        with open(f"{cwd}/eval_log.json", "w") as fout:
+        
+        eval_log_path = Path(cwd) / "eval_log.json"
+        with eval_log_path.open("w") as fout:
             json.dump(trainer.state.log_history, fout)
+
         if hasattr(model.model, "virtual_prompt"):
             torch.save(model.model.virtual_prompt, f"{cwd}/virtual_prompt.pt")
+
         print("Memory training complete.")
 
-        logs_df = pd.DataFrame(trainer.state.log_history)
+        rows = load_eval_rows(eval_log_path)
 
-        # Keep only rows where the marker metric exists
-        if self.config.return_metric_key in logs_df.columns:
-            final_metrics = logs_df[logs_df[self.config.return_metric_key].notna()].copy()
-        else:
-            final_metrics = pd.DataFrame()
-        
-        final_eval_metric = None
-        if not final_metrics.empty and self.config.return_metric_key in final_metrics.columns:
-            eval_loss_series = pd.to_numeric(final_metrics[self.config.return_metric_key], errors="coerce").dropna()
-            if not eval_loss_series.empty:
-                final_eval_metric = float(eval_loss_series.iloc[-1])
-        
-        if final_eval_metric is None:
+        try:
+            final_eval_metric = extract_final_metric(rows, self.config.return_metric_key)
+        except ValueError as e:
+            available_keys = sorted({k for row in rows for k in row.keys()})
             raise ValueError(
-                f"Could not determine final {self.config.return_metric_key} from trainer.state.log_history. "
-                f"Available columns: {list(logs_df.columns)}"
-            )
+                f"Could not determine final {self.config.return_metric_key} from {eval_log_path}. "
+                f"Available columns: {available_keys}"
+            ) from e
         
         print(f"Final {self.config.return_metric_key}: {final_eval_metric}")
         return final_eval_metric
