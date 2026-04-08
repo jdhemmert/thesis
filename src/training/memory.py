@@ -110,9 +110,9 @@ class MemoryBankTrainer(Trainer):
             oracle_attention_mask=inputs["oracle_attention_mask"],
             memory_attention_mask=inputs["memory_attention_mask"],
             temperature=self.T,
-            # use_gt_ce=self.use_gt_ce,
+            alpha=self.alpha,
+            use_gt_ce=True,
             memory_labels=inputs["memory_labels"],
-            gt_ce_weight=getattr(self, "gt_ce_weight", 1.0),
         )
         return (loss, student_out) if return_outputs else loss
 
@@ -168,8 +168,9 @@ class MemoryBankTrainer(Trainer):
                 oracle_attention_mask=inputs["oracle_attention_mask"],
                 memory_attention_mask=inputs["memory_attention_mask"],
                 temperature=self.T,
+                alpha=self.alpha,
+                use_gt_ce=True,
                 memory_labels=inputs["memory_labels"],
-                gt_ce_weight=getattr(self, "gt_ce_weight", 1.0),
             )
     
             teacher_logits = oracle_out.logits   # [bs, seq, vocab]

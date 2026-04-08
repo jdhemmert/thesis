@@ -34,23 +34,16 @@ def teacher_only_distill_loss(
     oracle_prompt_len, memory_prompt_len,
     oracle_attention_mask, memory_attention_mask,
     temperature: float,
+    alpha: float = 1.0,
     use_gt_ce: bool = False,
-    memory_labels=None,  # answer-only labels for student stream if using GT CE
-    gt_ce_weight: float = 1.0,
+    memory_labels=None,
 ):
-    """
-    teacher_logits/student_logits: [bs, seq, vocab]
-    prompt_len tensors: [bs]
-    attention_masks: [bs, seq]
-    memory_labels: [bs, seq] with -100 for non-answer, required if use_gt_ce
-    """
     bs, seq, vocab = student_logits.shape
     T = float(temperature)
 
     total_kl = student_logits.new_tensor(0.0)
     total_tok = 0
 
-    # KL aligned by answer index
     for i in range(bs):
         t_slice = _answer_pred_slice(
             teacher_logits[i], int(oracle_prompt_len[i].item()), oracle_attention_mask[i]
@@ -67,15 +60,11 @@ def teacher_only_distill_loss(
         s_logp = F.log_softmax(s_slice[:L, :] / T, dim=-1)
         t_p = t_logp.exp()
 
-        # KL per token: sum_v pT (log pT - log pS)
         kl_tok = (t_p * (t_logp - s_logp)).sum(dim=-1)
         total_kl = total_kl + kl_tok.sum() * (T * T)
         total_tok += L
 
     if total_tok == 0:
-        # No answer tokens found in any sample. This usually means oracle_prompt_len
-        # >= real_len for all examples (e.g. very long biographies truncate the answer
-        # out of the sequence). Log the first batch's values to aid diagnosis.
         print(
             f"[losses] WARNING: no answer tokens in batch (bs={bs}). "
             f"oracle_prompt_len={oracle_prompt_len.tolist()}, "
@@ -83,22 +72,42 @@ def teacher_only_distill_loss(
             f"memory_prompt_len={memory_prompt_len.tolist()}, "
             f"memory_real_lens={memory_attention_mask.sum(-1).tolist()}"
         )
-        # Return zero loss that still participates in the graph so backward() doesn't crash.
         return student_logits.sum() * 0.0
 
-    loss = total_kl / total_tok
+    kl_loss = total_kl / total_tok
 
     if use_gt_ce:
         assert memory_labels is not None, "memory_labels required when use_gt_ce=True"
+
+        seq_diff = student_logits.size(1) - memory_labels.size(1)
+        if seq_diff < 0:
+            raise ValueError(
+                f"student_logits shorter than memory_labels: "
+                f"{student_logits.size(1)} vs {memory_labels.size(1)}"
+            )
+        elif seq_diff > 0:
+            pad = torch.full(
+                (memory_labels.size(0), seq_diff),
+                -100,
+                dtype=memory_labels.dtype,
+                device=memory_labels.device,
+            )
+            memory_labels = torch.cat([pad, memory_labels], dim=1)
+
+        assert student_logits.size(1) == memory_labels.size(1)
         shift_logits = student_logits[:, :-1, :].contiguous()
         shift_labels = memory_labels[:, 1:].contiguous()
-        ce = F.cross_entropy(
+
+        ce_loss = F.cross_entropy(
             shift_logits.view(-1, vocab),
             shift_labels.view(-1),
             ignore_index=-100,
             reduction="mean",
         )
-        loss = loss + gt_ce_weight * ce
+
+        loss = alpha * kl_loss + (1 - alpha) * ce_loss
+    else:
+        loss = kl_loss
 
     return loss
 
