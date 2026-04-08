@@ -198,18 +198,46 @@ def resolve_eval_logs(
 ) -> Tuple[List[Optional[str]], List[Optional[str]], Dict[Tuple[int, int], Optional[Path]], List[Path]]:
     """
     Resolve the eval_log.json path for each cell in the requested sweep slice.
+    """
+    return resolve_single_file_per_run(
+        root=root,
+        sweep_params=sweep_params,
+        subdir_template=subdir_template,
+        x_param=x_param,
+        y_param=y_param,
+        pins=pins,
+        pattern="eval_log.json",
+        require_unique=True,
+    )
+
+
+def resolve_single_file_per_run(
+    *,
+    root: Path,
+    sweep_params: Dict[str, List[str]],
+    subdir_template: str,
+    x_param: Optional[str],
+    y_param: Optional[str],
+    pins: Dict[str, str],
+    pattern: str,
+    require_unique: bool = True,
+) -> Tuple[List[Optional[str]], List[Optional[str]], Dict[Tuple[int, int], Optional[Path]], List[Path]]:
+    """
+    Resolve one file per run directory using a glob pattern.
 
     Returns:
       - x_vals
       - y_vals
-      - cell_eval_logs[(row, col)] -> Path | None
-      - existing_eval_logs
+      - cell_files[(row, col)] -> Path | None
+      - existing_files
+
+    If require_unique=True and multiple matches exist in a run dir, raises.
     """
     x_vals, y_vals, pinned = validate_slice(sweep_params, x_param, y_param, pins)
     nrows, ncols = len(y_vals), len(x_vals)
 
-    cell_eval_logs: Dict[Tuple[int, int], Optional[Path]] = {}
-    existing_eval_logs: List[Path] = []
+    cell_files: Dict[Tuple[int, int], Optional[Path]] = {}
+    existing_files: List[Path] = []
 
     swept_keys_in_order = list(sweep_params.keys())
 
@@ -230,12 +258,20 @@ def resolve_eval_logs(
 
             subdir = render_subdir(subdir_template, assignment, sweep_params)
             run_dir = root / subdir
-            elog = run_dir / "eval_log.json"
 
-            if elog.exists():
-                cell_eval_logs[(r, c)] = elog
-                existing_eval_logs.append(elog)
-            else:
-                cell_eval_logs[(r, c)] = None
+            matches = sorted(run_dir.glob(pattern))
+            if not matches:
+                cell_files[(r, c)] = None
+                continue
 
-    return x_vals, y_vals, cell_eval_logs, existing_eval_logs
+            if require_unique and len(matches) != 1:
+                raise ValueError(
+                    f"Expected exactly one match for pattern {pattern!r} in {run_dir}, "
+                    f"but found {len(matches)}: {[str(m.name) for m in matches]}"
+                )
+
+            chosen = matches[-1]
+            cell_files[(r, c)] = chosen
+            existing_files.append(chosen)
+
+    return x_vals, y_vals, cell_files, existing_files
