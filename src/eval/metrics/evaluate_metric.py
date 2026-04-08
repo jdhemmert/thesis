@@ -2,11 +2,14 @@ import evaluate
 import os
 import json
 import torch
+import torch.nn.functional as F
 import random
 from dataclasses import dataclass, field
 from typing import Dict, List, Any
 
 from .base import BaseMetric
+from utils import generation_diagnostics as diagnostic_functions
+
 
 @dataclass
 class EvaluateMetricConfig:
@@ -71,10 +74,6 @@ class EvaluateMetric(BaseMetric):
 
 
     def compute_and_log_scores(self, model, state, metrics: Dict):
-        """
-        Generates oracle and student predictions, computes metric scores on the student,
-        and logs both generations if configured.
-        """
         if model is None or self.tokenizer is None:
             print(f"Skipping EvaluateMetric({self.config.metric_name}) evaluation: model or tokenizer not available.")
             return
@@ -85,17 +84,51 @@ class EvaluateMetric(BaseMetric):
         oracle_preds = []
         all_labels = []
         all_questions_for_log = []
+        all_diagnostics = []
     
         model.eval()
     
-        has_virtual_tokens = hasattr(model, "virtual_prompt") or (hasattr(model, "model") and hasattr(model.model, "virtual_prompt"))
-
+        vp_active = (
+            hasattr(model, "model")
+            and getattr(model.model, "virtual_prompt", None) is not None
+            and getattr(model.model, "virtual_token_count", 0) > 0
+        )
+    
         for i in range(len(self.precomputed_data["student_input_ids"])):
-            student_input_ids = torch.tensor([self.precomputed_data["student_input_ids"][i]]).to(model.device)
-            student_attention_mask = torch.tensor([self.precomputed_data["student_attention_mask"][i]]).to(model.device)
-            oracle_input_ids = torch.tensor([self.precomputed_data["oracle_input_ids"][i]]).to(model.device)
-            oracle_attention_mask = torch.tensor([self.precomputed_data["oracle_attention_mask"][i]]).to(model.device)
-
+            student_input_ids = torch.tensor([self.precomputed_data["student_input_ids"][i]], device=model.device)
+            student_attention_mask = torch.tensor([self.precomputed_data["student_attention_mask"][i]], device=model.device)
+            oracle_input_ids = torch.tensor([self.precomputed_data["oracle_input_ids"][i]], device=model.device)
+            oracle_attention_mask = torch.tensor([self.precomputed_data["oracle_attention_mask"][i]], device=model.device)
+    
+            student_real_ids = [
+                id_ for id_, m in zip(
+                    self.precomputed_data["student_input_ids"][i],
+                    self.precomputed_data["student_attention_mask"][i]
+                )
+                if m == 1
+            ]
+            oracle_real_ids = [
+                id_ for id_, m in zip(
+                    self.precomputed_data["oracle_input_ids"][i],
+                    self.precomputed_data["oracle_attention_mask"][i]
+                )
+                if m == 1
+            ]
+    
+            gold_answer = self.precomputed_data["answer"][i]
+    
+            # Correct in-context first answer token, not standalone tokenization
+            gold_first_token_id_student = diagnostic_functions.first_generated_token_id_from_prompt_plus_answer(
+                self.tokenizer,
+                student_real_ids,
+                gold_answer,
+            )
+            gold_first_token_id_oracle = diagnostic_functions.first_generated_token_id_from_prompt_plus_answer(
+                self.tokenizer,
+                oracle_real_ids,
+                gold_answer,
+            )
+    
             with torch.no_grad():
                 oracle_ids = model.generate(
                     input_ids=oracle_input_ids,
@@ -103,7 +136,8 @@ class EvaluateMetric(BaseMetric):
                     max_new_tokens=50,
                     pad_token_id=self.tokenizer.pad_token_id,
                     eos_token_id=self.tokenizer.eos_token_id,
-                    **({"use_virtual_tokens": False} if has_virtual_tokens else {}),
+                    **({"use_virtual_tokens": False} if vp_active else {}),
+                    do_sample=False,
                 )
                 student_ids = model.generate(
                     input_ids=student_input_ids,
@@ -111,9 +145,49 @@ class EvaluateMetric(BaseMetric):
                     max_new_tokens=50,
                     pad_token_id=self.tokenizer.pad_token_id,
                     eos_token_id=self.tokenizer.eos_token_id,
-                    **({"use_virtual_tokens": True} if has_virtual_tokens else {}),
+                    **({"use_virtual_tokens": True} if vp_active else {}),
+                    do_sample=False,
                 )
-
+    
+                oracle_diag = diagnostic_functions.next_token_diagnostics(
+                    model=model,
+                    tokenizer=self.tokenizer,
+                    input_ids=oracle_input_ids,
+                    attention_mask=oracle_attention_mask,
+                    use_virtual_tokens=False,
+                    gold_first_token_id=gold_first_token_id_oracle,
+                    topk=10,
+                )
+    
+                student_diag = diagnostic_functions.next_token_diagnostics(
+                    model=model,
+                    tokenizer=self.tokenizer,
+                    input_ids=student_input_ids,
+                    attention_mask=student_attention_mask,
+                    use_virtual_tokens=True if vp_active else False,
+                    gold_first_token_id=gold_first_token_id_student,
+                    topk=10,
+                )
+    
+                student_no_memory_diag = diagnostic_functions.next_token_diagnostics(
+                    model=model,
+                    tokenizer=self.tokenizer,
+                    input_ids=student_input_ids,
+                    attention_mask=student_attention_mask,
+                    use_virtual_tokens=False,
+                    gold_first_token_id=gold_first_token_id_student,
+                    topk=10,
+                )
+    
+                vt_effect_diag = diagnostic_functions.virtual_token_effect_diagnostics(
+                    model=model,
+                    tokenizer=self.tokenizer,
+                    input_ids=student_input_ids,
+                    attention_mask=student_attention_mask,
+                    gold_first_token_id=gold_first_token_id_student,
+                    topk=10,
+                )
+    
             oracle_pred_ids = oracle_ids[0][len(oracle_input_ids[0]):]
             student_pred_ids = student_ids[0][len(student_input_ids[0]):]
     
@@ -122,8 +196,52 @@ class EvaluateMetric(BaseMetric):
     
             oracle_preds.append(oracle_text)
             student_preds.append(student_text)
-            all_labels.append(self.precomputed_data["answer"][i])
+            all_labels.append(gold_answer)
             all_questions_for_log.append(self.precomputed_data["question"][i])
+    
+            all_diagnostics.append({
+                "vp_active_for_eval": bool(vp_active),
+    
+                "gold_first_token_info": {
+                    "student_prompt_gold_first_token_id": gold_first_token_id_student,
+                    "student_prompt_gold_first_token_text": (
+                        diagnostic_functions.safe_decode_token(self.tokenizer, gold_first_token_id_student)
+                        if gold_first_token_id_student is not None else None
+                    ),
+                    "oracle_prompt_gold_first_token_id": gold_first_token_id_oracle,
+                    "oracle_prompt_gold_first_token_text": (
+                        diagnostic_functions.safe_decode_token(self.tokenizer, gold_first_token_id_oracle)
+                        if gold_first_token_id_oracle is not None else None
+                    ),
+                },
+    
+                "oracle_next_token_diagnostics": oracle_diag,
+                "student_next_token_diagnostics": student_diag,
+                "student_no_memory_next_token_diagnostics": student_no_memory_diag,
+    
+                "student_memory_effect": {
+                    "gold_first_token_prob_delta": (
+                        None if gold_first_token_id_student is None else
+                        student_diag["gold_first_token_prob"] - student_no_memory_diag["gold_first_token_prob"]
+                    ),
+                    "argmax_changed_vs_no_memory": (
+                        student_diag["argmax_token_id"] != student_no_memory_diag["argmax_token_id"]
+                    ),
+                },
+    
+                "virtual_token_effect_diagnostics": vt_effect_diag,
+    
+                "generated_first_token_comparison": {
+                    "oracle_generated_first_token_id": int(oracle_pred_ids[0].item()) if oracle_pred_ids.numel() > 0 else None,
+                    "oracle_generated_first_token_text": diagnostic_functions.safe_decode_token(self.tokenizer, int(oracle_pred_ids[0].item())) if oracle_pred_ids.numel() > 0 else None,
+                    "student_generated_first_token_id": int(student_pred_ids[0].item()) if student_pred_ids.numel() > 0 else None,
+                    "student_generated_first_token_text": diagnostic_functions.safe_decode_token(self.tokenizer, int(student_pred_ids[0].item())) if student_pred_ids.numel() > 0 else None,
+                    "student_generated_first_token_matches_gold": (
+                        None if gold_first_token_id_student is None or student_pred_ids.numel() == 0 else
+                        bool(int(student_pred_ids[0].item()) == gold_first_token_id_student)
+                    ),
+                },
+            })
     
         metric_scores = self.metric_evaluator.compute(
             predictions=student_preds,
@@ -143,15 +261,20 @@ class EvaluateMetric(BaseMetric):
             with open(log_file_path, "w") as f:
                 for i in range(len(student_preds)):
                     oracle_real_ids = [
-                        id_ for id_, m in zip(self.precomputed_data["oracle_input_ids"][i],
-                                              self.precomputed_data["oracle_attention_mask"][i])
+                        id_ for id_, m in zip(
+                            self.precomputed_data["oracle_input_ids"][i],
+                            self.precomputed_data["oracle_attention_mask"][i]
+                        )
                         if m == 1
                     ]
                     student_real_ids = [
-                        id_ for id_, m in zip(self.precomputed_data["student_input_ids"][i],
-                                              self.precomputed_data["student_attention_mask"][i])
+                        id_ for id_, m in zip(
+                            self.precomputed_data["student_input_ids"][i],
+                            self.precomputed_data["student_attention_mask"][i]
+                        )
                         if m == 1
                     ]
+    
                     log_entry = {
                         "question": all_questions_for_log[i],
                         "ground_truth": all_labels[i],
@@ -159,5 +282,6 @@ class EvaluateMetric(BaseMetric):
                         "oracle_prediction": oracle_preds[i],
                         "student_context": self.tokenizer.decode(student_real_ids, skip_special_tokens=True),
                         "student_prediction": student_preds[i],
+                        **all_diagnostics[i],
                     }
                     f.write(json.dumps(log_entry) + "\n")
