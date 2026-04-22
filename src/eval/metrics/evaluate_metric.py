@@ -73,6 +73,27 @@ class EvaluateMetric(BaseMetric):
         return precomputed
 
 
+    def _greedy_decode(self, model, input_ids, attention_mask, max_new_tokens, use_virtual_tokens=None):
+        current_ids = input_ids.clone()
+        current_mask = attention_mask.clone()
+        generated = []
+        fwd_kwargs = {} if use_virtual_tokens is None else {"use_virtual_tokens": use_virtual_tokens}
+        for _ in range(max_new_tokens):
+            outputs = model(
+                input_ids=current_ids,
+                attention_mask=current_mask,
+                use_cache=False,
+                **fwd_kwargs
+            )
+            next_token_id = int(outputs.logits[0, -1, :].argmax())
+            if next_token_id == self.tokenizer.eos_token_id:
+                break
+            generated.append(next_token_id)
+            next_token = torch.tensor([[next_token_id]], dtype=current_ids.dtype, device=current_ids.device)
+            current_ids = torch.cat([current_ids, next_token], dim=1)
+            current_mask = torch.cat([current_mask, torch.ones(1, 1, dtype=current_mask.dtype, device=current_mask.device)], dim=1)
+        return generated
+
     def compute_and_log_scores(self, model, state, metrics: Dict):
         if model is None or self.tokenizer is None:
             print(f"Skipping EvaluateMetric({self.config.metric_name}) evaluation: model or tokenizer not available.")
@@ -130,25 +151,15 @@ class EvaluateMetric(BaseMetric):
             )
     
             with torch.no_grad():
-                oracle_ids = model.generate(
-                    input_ids=oracle_input_ids,
-                    attention_mask=oracle_attention_mask,
-                    max_new_tokens=50,
-                    pad_token_id=self.tokenizer.pad_token_id,
-                    eos_token_id=self.tokenizer.eos_token_id,
-                    **({"use_virtual_tokens": False} if vp_active else {}),
-                    do_sample=False,
+                oracle_pred_ids = self._greedy_decode(
+                    model, oracle_input_ids, oracle_attention_mask, 50,
+                    use_virtual_tokens=False if vp_active else None,
                 )
-                student_ids = model.generate(
-                    input_ids=student_input_ids,
-                    attention_mask=student_attention_mask,
-                    max_new_tokens=50,
-                    pad_token_id=self.tokenizer.pad_token_id,
-                    eos_token_id=self.tokenizer.eos_token_id,
-                    **({"use_virtual_tokens": True} if vp_active else {}),
-                    do_sample=False,
+                student_pred_ids = self._greedy_decode(
+                    model, student_input_ids, student_attention_mask, 50,
+                    use_virtual_tokens=True if vp_active else None,
                 )
-    
+
                 oracle_diag = diagnostic_functions.next_token_diagnostics(
                     model=model,
                     tokenizer=self.tokenizer,
@@ -158,7 +169,7 @@ class EvaluateMetric(BaseMetric):
                     gold_first_token_id=gold_first_token_id_oracle,
                     topk=10,
                 )
-    
+
                 student_diag = diagnostic_functions.next_token_diagnostics(
                     model=model,
                     tokenizer=self.tokenizer,
@@ -168,7 +179,7 @@ class EvaluateMetric(BaseMetric):
                     gold_first_token_id=gold_first_token_id_student,
                     topk=10,
                 )
-    
+
                 student_no_memory_diag = diagnostic_functions.next_token_diagnostics(
                     model=model,
                     tokenizer=self.tokenizer,
@@ -178,7 +189,7 @@ class EvaluateMetric(BaseMetric):
                     gold_first_token_id=gold_first_token_id_student,
                     topk=10,
                 )
-    
+
                 vt_effect_diag = diagnostic_functions.virtual_token_effect_diagnostics(
                     model=model,
                     tokenizer=self.tokenizer,
@@ -187,9 +198,6 @@ class EvaluateMetric(BaseMetric):
                     gold_first_token_id=gold_first_token_id_student,
                     topk=10,
                 )
-    
-            oracle_pred_ids = oracle_ids[0][len(oracle_input_ids[0]):]
-            student_pred_ids = student_ids[0][len(student_input_ids[0]):]
     
             oracle_text = self.tokenizer.decode(oracle_pred_ids, skip_special_tokens=True).strip()
             student_text = self.tokenizer.decode(student_pred_ids, skip_special_tokens=True).strip()
@@ -232,13 +240,13 @@ class EvaluateMetric(BaseMetric):
                 "virtual_token_effect_diagnostics": vt_effect_diag,
     
                 "generated_first_token_comparison": {
-                    "oracle_generated_first_token_id": int(oracle_pred_ids[0].item()) if oracle_pred_ids.numel() > 0 else None,
-                    "oracle_generated_first_token_text": diagnostic_functions.safe_decode_token(self.tokenizer, int(oracle_pred_ids[0].item())) if oracle_pred_ids.numel() > 0 else None,
-                    "student_generated_first_token_id": int(student_pred_ids[0].item()) if student_pred_ids.numel() > 0 else None,
-                    "student_generated_first_token_text": diagnostic_functions.safe_decode_token(self.tokenizer, int(student_pred_ids[0].item())) if student_pred_ids.numel() > 0 else None,
+                    "oracle_generated_first_token_id": oracle_pred_ids[0] if oracle_pred_ids else None,
+                    "oracle_generated_first_token_text": diagnostic_functions.safe_decode_token(self.tokenizer, oracle_pred_ids[0]) if oracle_pred_ids else None,
+                    "student_generated_first_token_id": student_pred_ids[0] if student_pred_ids else None,
+                    "student_generated_first_token_text": diagnostic_functions.safe_decode_token(self.tokenizer, student_pred_ids[0]) if student_pred_ids else None,
                     "student_generated_first_token_matches_gold": (
-                        None if gold_first_token_id_student is None or student_pred_ids.numel() == 0 else
-                        bool(int(student_pred_ids[0].item()) == gold_first_token_id_student)
+                        None if gold_first_token_id_student is None or not student_pred_ids else
+                        bool(student_pred_ids[0] == gold_first_token_id_student)
                     ),
                 },
             })
