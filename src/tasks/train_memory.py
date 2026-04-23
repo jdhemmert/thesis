@@ -64,7 +64,16 @@ class TrainMemoryTask:
         dataset = load_dataset("json", data_files=dataset_config.path)["train"]
         original_columns = list(dataset.column_names)
 
-        if self.config.sample_n:
+        self._bio_metadata = None
+        if getattr(dataset_config, "biography_index", None) is not None:
+            raw_example = dataset[dataset_config.biography_index]
+            self._bio_metadata = {
+                k: v for k, v in raw_example.items()
+                if isinstance(v, (str, int, float, bool))
+            }
+            self._bio_metadata["biography_index"] = dataset_config.biography_index
+            dataset = dataset.select([dataset_config.biography_index])
+        elif self.config.sample_n:
             if self.config.sample_strategy == 'random':
                 dataset = dataset.shuffle(seed=self.config.seed).select(range(self.config.sample_n))
             else:
@@ -206,6 +215,11 @@ class TrainMemoryTask:
 
         if hasattr(model.model, "virtual_prompt"):
             torch.save(model.model.virtual_prompt, f"{cwd}/virtual_prompt.pt")
+
+        if getattr(self, "_bio_metadata", None) is not None:
+            bio_meta_path = Path(cwd) / "bio_metadata.json"
+            with bio_meta_path.open("w") as f:
+                json.dump(self._bio_metadata, f, indent=2)
 
         print("Memory training complete.")
 

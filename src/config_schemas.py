@@ -17,6 +17,7 @@ class DatasetConfig:
     dataset_mode: str = "qa"  # qa, wikitext, attributes (legacy; use parser+biography_task instead)
     parser: Optional[Any] = field(default=None)
     biography_task: Optional[Any] = field(default=None)
+    biography_index: Optional[int] = field(default=None)
 
 @dataclass
 class ModelConfigGroup:
