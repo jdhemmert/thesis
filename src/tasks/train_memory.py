@@ -48,6 +48,7 @@ class TrainMemoryTaskConfig(BaseTaskConfig):
     
     loss_type: str = "balanced"
     alpha: float = 0.5
+    distractor_n: int = 0
     temperature: float = 1.0
 
     return_metric_key: str = "eval_loss"
@@ -60,11 +61,20 @@ class TrainMemoryTaskConfig(BaseTaskConfig):
 
 class TrainMemoryTask:
     def _load_data(self, tokenizer, dataset_config):
-        """Loads, samples, and preprocesses the dataset for memory training."""
+        """Loads, samples, and preprocesses the dataset for memory training.
+
+        Returns (train_dataset, eval_dataset). eval_dataset contains only the
+        target bio(s); train_dataset additionally includes distractor bios when
+        task.distractor_n > 0 so that per-epoch eval metrics remain clean.
+        """
+        import random
+
         dataset = load_dataset("json", data_files=dataset_config.path)["train"]
         original_columns = list(dataset.column_names)
 
         self._bio_metadata = None
+        distractor_pool = None
+
         if getattr(dataset_config, "biography_index", None) is not None:
             raw_example = dataset[dataset_config.biography_index]
             self._bio_metadata = {
@@ -72,12 +82,17 @@ class TrainMemoryTask:
                 if isinstance(v, (str, int, float, bool))
             }
             self._bio_metadata["biography_index"] = dataset_config.biography_index
+            if self.config.distractor_n > 0:
+                distractor_pool = dataset  # full dataset; biography_index excluded when sampling
             dataset = dataset.select([dataset_config.biography_index])
         elif self.config.sample_n:
             if self.config.sample_strategy == 'random':
-                dataset = dataset.shuffle(seed=self.config.seed).select(range(self.config.sample_n))
+                shuffled = dataset.shuffle(seed=self.config.seed)
             else:
-                dataset = dataset.select(range(self.config.sample_n))
+                shuffled = dataset
+            dataset = shuffled.select(range(self.config.sample_n))
+            if self.config.distractor_n > 0:
+                distractor_pool = shuffled  # remainder starts at index sample_n
 
         using_new_path = (
             getattr(dataset_config, "parser", None) is not None
@@ -108,12 +123,34 @@ class TrainMemoryTask:
             biography_task=biography_task,
         )
 
-        tokenized_dataset = dataset.map(
+        eval_dataset = dataset.map(
             preprocessor,
             batched=True,
             remove_columns=remove_columns
         )
-        return tokenized_dataset
+
+        train_dataset = eval_dataset
+        if distractor_pool is not None and self.config.distractor_n > 0:
+            if getattr(dataset_config, "biography_index", None) is not None:
+                rng = random.Random(self.config.seed)
+                pool = [i for i in range(len(distractor_pool)) if i != dataset_config.biography_index]
+                sampled_indices = rng.sample(pool, min(self.config.distractor_n, len(pool)))
+                distractor_raw = distractor_pool.select(sampled_indices)
+            else:
+                start = self.config.sample_n
+                n = min(self.config.distractor_n, len(distractor_pool) - start)
+                distractor_raw = distractor_pool.select(range(start, start + n)) if n > 0 else None
+
+            if distractor_raw is not None and len(distractor_raw) > 0:
+                distractor_tokenized = distractor_raw.map(
+                    preprocessor,
+                    batched=True,
+                    remove_columns=remove_columns,
+                )
+                train_dataset = datasets.concatenate_datasets([eval_dataset, distractor_tokenized])
+                print(f"Distractor bios: {len(distractor_raw)} bios → {len(distractor_tokenized)} QA pairs added to train.")
+
+        return train_dataset, eval_dataset
 
     def __init__(self, **kwargs):
         self.config = TrainMemoryTaskConfig(**kwargs)
@@ -157,7 +194,7 @@ class TrainMemoryTask:
             model.model.rebuild_virtual_prompt(weights=initial_weights)
 
         # TODO: maybe pass this into initializers instead of path
-        tokenized_dataset = self._load_data(tokenizer, cfg.dataset)
+        train_tokenized, eval_tokenized = self._load_data(tokenizer, cfg.dataset)
 
         if self.config.trainable_strategy == "soft_prompt_only":
             print("Freezing base model, training soft prompt only.")
@@ -181,14 +218,15 @@ class TrainMemoryTask:
             prediction_loss_only=False,
         )
 
-        trainer_dataset = tokenized_dataset.remove_columns(
-            [c for c in tokenized_dataset.column_names if isinstance(tokenized_dataset.features[c], datasets.Value) and tokenized_dataset.features[c].dtype == 'string']
-        )
+        def _drop_str(ds):
+            return ds.remove_columns([c for c in ds.column_names if isinstance(ds.features[c], datasets.Value) and ds.features[c].dtype == 'string'])
+        train_trainer_dataset = _drop_str(train_tokenized)
+        eval_trainer_dataset = _drop_str(eval_tokenized)
 
         callbacks = []
-        if self.config.extrinsic_validation.frequency != ExtrinsicValidationFrequency.NEVER:       
+        if self.config.extrinsic_validation.frequency != ExtrinsicValidationFrequency.NEVER:
             import src.eval.metrics.loaders
-            callbacks.append(ExtrinsicValidationCallback(self.config.extrinsic_validation, tokenized_dataset, tokenizer, cwd, self.prompts))
+            callbacks.append(ExtrinsicValidationCallback(self.config.extrinsic_validation, eval_tokenized, tokenizer, cwd, self.prompts))
 
         trainer = MemoryBankTrainer(
             model=model,
@@ -196,8 +234,8 @@ class TrainMemoryTask:
             loss_alpha=self.config.alpha,
             temperature=self.config.temperature,
             args=training_args,
-            train_dataset=trainer_dataset,
-            eval_dataset=trainer_dataset,
+            train_dataset=train_trainer_dataset,
+            eval_dataset=eval_trainer_dataset,
             callbacks=callbacks,
             processing_class=tokenizer,
             data_collator=SelfDistillationDataCollator(tokenizer),
