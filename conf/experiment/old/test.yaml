@@ -1,0 +1,25 @@
+# @package _global_
+
+defaults:
+  # - /task/extrinsic_validation: rouge
+  - override /task:  train_memory
+  - override /model: augmented_llama
+  - override /dataset: plm
+  - _self_
+
+
+experiment_path: "test"
+
+
+model:
+    model_config:
+        # model_path: "meta-llama/Llama-3.2-3B-Instruct"
+        virtual_token_count: 100
+
+task:
+    sample_n: 125
+    num_train_epochs: 5
+    
+    # extrinsic_validation:
+    #     metric_config:
+    #         sample_count: 100

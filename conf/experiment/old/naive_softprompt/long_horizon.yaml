@@ -15,11 +15,11 @@ hydra:
     sweeper:
         params:
             task.sample_n: 50, 100, 500, 1000
-            model.model_config.virtual_token_count: 500, 1000
+            model.model_config.virtual_token_count: 500 #, 1000
             model.model_config.attention_dropout: 0.2, 0.4, 0.6, 0.8
 
 task:
-    num_train_epochs: 1000
+    num_train_epochs: 500
 
     learning_rate: 5e-2
     lr_scheduler_type: constant

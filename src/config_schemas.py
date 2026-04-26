@@ -48,7 +48,9 @@ class Config:
     dataset: DatasetConfig = field(default_factory=DatasetConfig)
     prompts: PromptConfig = field(default_factory=PromptConfig)
 
+    output_root: str = field(default="results")
     experiment_path: str = field(default="scratch")
+    experiment_subdir: str = field(default="")
     base_output_dir: str = field(default=MISSING)
 
 cs = ConfigStore.instance()

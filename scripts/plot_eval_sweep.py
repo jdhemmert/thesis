@@ -15,7 +15,7 @@ from typing import Dict, List, Optional
 import matplotlib.pyplot as plt
 
 from src.utils.sweep import parse_pins, parse_sweep_config, resolve_eval_logs
-from src.utils.logs import (
+from src.utils.eval_logs import (
     compute_global_limits,
     discover_metric_keys,
     extract_metric_points,

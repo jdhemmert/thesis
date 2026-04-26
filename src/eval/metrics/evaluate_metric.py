@@ -67,7 +67,7 @@ class EvaluateMetric(BaseMetric):
             precomputed["student_attention_mask"].append(example[student_attn_key])
             precomputed["oracle_input_ids"].append(example[oracle_key])
             precomputed["oracle_attention_mask"].append(example[oracle_attn_key])
-            precomputed["answer"].append(example["answer"])
+            precomputed["answer"].append(f" {example["answer"]}")
             precomputed["question"].append(example.get("question", "N/A"))
 
         return precomputed

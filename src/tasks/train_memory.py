@@ -22,7 +22,7 @@ from src.models.base import ModelFactory
 from src.models.initializers import InitializerName, INITIALIZER_MAP
 from src.training.memory import MemoryBankTrainer, SelfDistillationDataCollator
 from src.data.preprocessors import MemoryTaskPreprocessor
-from src.utils.logs import load_eval_rows, extract_final_metric
+from src.utils.eval_logs import load_eval_rows, extract_final_metric
 
 
 @register_task(name="train_memory", group="task")
