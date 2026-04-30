@@ -1,0 +1,8 @@
+# @package _global_
+
+defaults:
+    - ood/common
+    - _self_
+
+
+experiment_subdir: "test"

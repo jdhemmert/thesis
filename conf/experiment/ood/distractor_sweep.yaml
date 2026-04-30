@@ -1,0 +1,19 @@
+# @package _global_
+
+defaults:
+    - ood/common
+    - _self_
+
+
+experiment_subdir: distractor_sweep
+
+task:
+    distractor_n: 1
+
+hydra:
+    mode: MULTIRUN
+    sweep:
+        subdir: ${task.distractor_n}distractor
+    sweeper:
+        params:
+            task.distractor_n: range(0, 5)

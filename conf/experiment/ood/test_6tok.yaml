@@ -1,0 +1,13 @@
+# @package _global_
+
+defaults:
+    - ood/common
+    - _self_
+
+
+experiment_subdir: "test_6tok"
+
+
+model:
+    model_config:
+        virtual_token_count: 10

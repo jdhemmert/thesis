@@ -1,0 +1,27 @@
+# @package _global_
+
+defaults:
+    # - /adapter: qa_finetune
+    - /task/extrinsic_validation: rouge
+    - override /task: train_memory
+    - override /model: augmented_llama
+    - override /dataset: qa_12k
+    - _self_
+
+
+experiment_path: "ood"
+
+
+task:
+    sample_n: 1
+    num_train_epochs: 50
+
+
+dataset:
+    biography_index: 42
+
+
+model:
+    model_config:
+        model_path: "meta-llama/Llama-3.2-3B"
+        virtual_token_count: 12
