@@ -3,7 +3,7 @@ hydra:
     dir: ${base_output_dir}
   sweep:
     dir: ${base_output_dir}
-    subdir: ${task.distractor_n}distractor
+    subdir: ${task.distractor_n}distractor/seed${task.seed}
   launcher:
     _target_: hydra._internal.core_plugins.basic_launcher.BasicLauncher
   sweeper:
@@ -11,6 +11,7 @@ hydra:
     max_batch_size: null
     params:
       task.distractor_n: range(0, 5)
+      task.seed: range(0, 5)
   help:
     app_name: ${hydra.job.name}
     header: '${hydra.help.app_name} is powered by Hydra.
@@ -207,7 +208,7 @@ task:
   lr_scheduler_type: linear
   num_train_epochs: 50
   precision: bf16
-  seed: 1777516634
+  seed: 1777524788
   max_length: 512
   eval_strategy: epoch
   eval_steps: 100
@@ -233,6 +234,12 @@ task:
   initialization_method: null
   initialization_config: {}
   trainable_strategy: soft_prompt_only
+  ood_eval:
+    enabled: true
+    target_indices:
+    - 43
+    max_new_tokens: 20
+    sample_n: null
 dataset:
   path: data/qa_bio_attributes.jsonl
   test_split_ratio: 0.125

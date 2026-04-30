@@ -1,0 +1,3 @@
+- task.distractor_n=0
+- task.seed=2
+- +experiment=ood/distractor_sweep

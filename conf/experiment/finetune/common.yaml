@@ -1,0 +1,18 @@
+# @package _global_
+
+defaults:
+  - /task/extrinsic_validation: rouge
+  - override /task:  finetune
+  - override /dataset: qa_12k
+  - override /model: standard
+  - override /model/adapter_config: lora
+  - _self_
+
+
+experiment_path: "finetune"
+experiment_subdir: qa/${task.num_train_epochs}epochs_${task.sample_n}samples
+
+
+task:
+    num_train_epochs: 3
+    sample_n: 200

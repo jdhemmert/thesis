@@ -1,0 +1,10 @@
+# @package _global_
+
+defaults:
+    - finetune/common
+    - _self_
+
+
+model:
+    model_config:
+        model_path: "meta-llama/Llama-3.2-3B-Instruct"

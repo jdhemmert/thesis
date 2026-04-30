@@ -1,0 +1,10 @@
+# @package _global_
+
+defaults:
+    - override /hydra/launcher: submitit_slurm
+    - _self_
+
+hydra:
+    launcher:
+        partition: glinda
+        timeout_min: 4320
