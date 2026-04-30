@@ -13,7 +13,8 @@ task:
 hydra:
     mode: MULTIRUN
     sweep:
-        subdir: ${task.distractor_n}distractor
+        subdir: ${task.distractor_n}distractor/seed${task.seed}
     sweeper:
         params:
             task.distractor_n: range(0, 5)
+            task.seed: 1,2,3

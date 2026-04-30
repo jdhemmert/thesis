@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional, Any
+from typing import Optional, Any, List
 import json
 import time
 from pathlib import Path
@@ -23,6 +23,14 @@ from src.models.initializers import InitializerName, INITIALIZER_MAP
 from src.training.memory import MemoryBankTrainer, SelfDistillationDataCollator
 from src.data.preprocessors import MemoryTaskPreprocessor
 from src.utils.eval_logs import load_eval_rows, extract_final_metric
+
+
+@dataclass
+class OODEvalConfig:
+    enabled: bool = False
+    target_indices: List[int] = field(default_factory=list)
+    max_new_tokens: int = 50
+    sample_n: Optional[int] = None
 
 
 @register_task(name="train_memory", group="task")
@@ -57,6 +65,8 @@ class TrainMemoryTaskConfig(BaseTaskConfig):
     initialization_config: dict = field(default_factory=lambda: { })
 
     trainable_strategy: str = "soft_prompt_only" # all, soft_prompt_only
+
+    ood_eval: OODEvalConfig = field(default_factory=OODEvalConfig)
 
 
 class TrainMemoryTask:
@@ -260,6 +270,21 @@ class TrainMemoryTask:
                 json.dump(self._bio_metadata, f, indent=2)
 
         print("Memory training complete.")
+
+        ood_cfg = self.config.ood_eval
+        if ood_cfg.enabled and ood_cfg.target_indices:
+            from src.eval.ood import run_ood_eval
+            print(f"Running OOD eval against bio indices: {list(ood_cfg.target_indices)}")
+            run_ood_eval(
+                model=model,
+                tokenizer=tokenizer,
+                cfg=cfg,
+                cwd=cwd,
+                bio_a_meta=getattr(self, "_bio_metadata", {}),
+                target_indices=list(ood_cfg.target_indices),
+                max_new_tokens=ood_cfg.max_new_tokens,
+                sample_n=ood_cfg.sample_n,
+            )
 
         rows = load_eval_rows(eval_log_path)
 

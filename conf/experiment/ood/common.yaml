@@ -15,6 +15,9 @@ experiment_path: "ood"
 task:
     sample_n: 1
     num_train_epochs: 50
+    ood_eval:
+        enabled: true
+        target_indices: [43]
 
 
 dataset:
