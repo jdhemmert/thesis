@@ -1,0 +1,3 @@
+- task.alpha=0.25
+- task.temperature=1
+- +experiment=first_token/loss_sweep

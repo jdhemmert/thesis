@@ -1,0 +1,14 @@
+# @package _global_
+
+defaults:
+    - first_token/common
+    - _self_
+
+
+experiment_subdir: "llama_instruct_qa_finetune"
+
+
+model:
+    model_config:
+        model_path: "meta-llama/Llama-3.2-3B-Instruct"
+    adapter_path: "results/finetune/qa/3epochs_200samples"
