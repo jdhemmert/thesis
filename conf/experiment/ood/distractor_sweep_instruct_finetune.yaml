@@ -1,0 +1,26 @@
+# @package _global_
+
+defaults:
+    - ood/common
+    - _self_
+
+
+experiment_subdir: distractor_sweep_instruct_finetune
+
+task:
+    distractor_n: 1
+
+model:
+    model_config:
+        model_path: "meta-llama/Llama-3.2-3B-Instruct"
+    adapter_path: "results/finetune/qa/3epochs_200samples"
+
+hydra:
+    mode: MULTIRUN
+    sweep:
+        subdir: ${task.distractor_n}distractor/seed${task.seed}
+    sweeper:
+        params:
+            # task.distractor_n: 0, 1
+            task.distractor_n: range(0, 5)
+            task.seed: range(0, 5)

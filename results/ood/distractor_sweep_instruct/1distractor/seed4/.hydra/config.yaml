@@ -1,0 +1,110 @@
+project_name: thesis
+seed: 42
+model:
+  architecture: AUGMENTED_LLAMA
+  model_config:
+    _target_: src.models.augmented_llama.AugmentedLlamaConfig
+    model_path: meta-llama/Llama-3.2-3B-Instruct
+    attention_bias: false
+    attention_dropout: 0.0
+    bos_token_id: 128000
+    dtype: bfloat16
+    eos_token_id: 128001
+    head_dim: 128
+    hidden_act: silu
+    hidden_size: 3072
+    initializer_range: 0.02
+    intermediate_size: 8192
+    max_position_embeddings: 131072
+    mlp_bias: false
+    model_type: llama
+    num_attention_heads: 24
+    num_hidden_layers: 28
+    num_key_value_heads: 8
+    pretraining_tp: 1
+    rms_norm_eps: 1.0e-05
+    rope_scaling:
+      factor: 32.0
+      high_freq_factor: 4.0
+      low_freq_factor: 1.0
+      original_max_position_embeddings: 8192
+      rope_type: llama3
+    rope_theta: 500000.0
+    tie_word_embeddings: true
+    transformers_version: 4.57.3
+    use_cache: true
+    vocab_size: 128256
+    virtual_token_count: 12
+  adapter_config: null
+  adapter_path: null
+  precision: bf16
+task:
+  _target_: src.tasks.train_memory.TrainMemoryTask
+  name: train_memory
+  learning_rate: 0.0002
+  lr_scheduler_type: linear
+  num_train_epochs: 50
+  precision: bf16
+  seed: 4
+  max_length: 512
+  eval_strategy: epoch
+  eval_steps: 100
+  sample_n: 1
+  sample_strategy: random
+  log_predictions: true
+  extrinsic_validation:
+    frequency: END
+    metric_type: evaluate
+    metric_config:
+      _target_: src.eval.metrics.evaluate_metric.EvaluateMetricConfig
+      metric_name: rouge
+      log_predictions: true
+      sample_count: 100
+    generation_input_key: null
+  save_strategy: 'no'
+  training_arguments: {}
+  loss_type: balanced
+  alpha: 0.5
+  distractor_n: 1
+  temperature: 1.0
+  return_metric_key: eval_loss
+  initialization_method: null
+  initialization_config: {}
+  trainable_strategy: soft_prompt_only
+  ood_eval:
+    enabled: true
+    target_indices:
+    - 43
+    max_new_tokens: 20
+    sample_n: null
+dataset:
+  path: data/qa_bio_attributes.jsonl
+  test_split_ratio: 0.125
+  streaming: false
+  physical_batch_size: 4
+  accumulation_steps: 1
+  dataset_mode: attributes
+  parser: null
+  biography_task: null
+  biography_index: 42
+prompts:
+  contextual_qa_training: 'Biography: {biography}
+
+    Question: {question}
+
+    Answer: {answer}'
+  contextual_qa_generation: 'Biography: {biography}
+
+    Question: {question}
+
+    Answer:'
+  direct_qa_training: 'Question: {question}
+
+    Answer: {answer}'
+  direct_qa_generation: 'Question: {question}
+
+    Answer:'
+output_root: results
+experiment_path: ood
+experiment_subdir: distractor_sweep_instruct
+base_output_dir: ${output_root}/${experiment_path}/${experiment_subdir}

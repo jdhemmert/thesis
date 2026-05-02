@@ -1,0 +1,6 @@
+[2026-05-02 11:35:29,072][huggingface_hub.utils._http][WARNING] - '(MaxRetryError('HTTPSConnectionPool(host=\'huggingface.co\', port=443): Max retries exceeded with url: /meta-llama/Llama-3.2-3B-Instruct/resolve/main/tokenizer_config.json (Caused by ProxyError(\'Unable to connect to proxy\', NewConnectionError("HTTPSConnection(host=\'proxy.ca.sandia.gov\', port=80): Failed to establish a new connection: [Errno 101] Network is unreachable")))'), '(Request ID: 906b25f3-b8fe-4036-84ac-91f0e8f9bc17)')' thrown while requesting HEAD https://huggingface.co/meta-llama/Llama-3.2-3B-Instruct/resolve/main/tokenizer_config.json
+[2026-05-02 11:35:29,073][huggingface_hub.utils._http][WARNING] - Retrying in 1s [Retry 1/5].
+[2026-05-02 11:36:06,880][absl][INFO] - Using default tokenizer.
+[2026-05-02 11:36:16,778][absl][INFO] - Using default tokenizer.
+[2026-05-02 11:36:16,861][absl][INFO] - Using default tokenizer.
+[2026-05-02 11:36:16,943][absl][INFO] - Using default tokenizer.

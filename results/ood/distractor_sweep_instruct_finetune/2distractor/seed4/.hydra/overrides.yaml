@@ -1,0 +1,3 @@
+- task.distractor_n=2
+- task.seed=4
+- +experiment=ood/distractor_sweep_instruct_finetune

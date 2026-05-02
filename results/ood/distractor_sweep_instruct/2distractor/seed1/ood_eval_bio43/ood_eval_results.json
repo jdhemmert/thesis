@@ -1,0 +1,41 @@
+{
+  "bio_a": {
+    "name": "Myles Spencer Macdonald",
+    "gender": "M",
+    "birth_date": "November 4, 1929",
+    "birth_city": "Lobelville, TN",
+    "college": "University of Montevallo",
+    "major": "Geosciences",
+    "company": "General Electric Company",
+    "biography": "Myles Spencer Macdonald's birthday is on November 4, 1929. he spent his early years in Lobelville, TN. he attended University of Montevallo. he majored in Geosciences. he is currently employed by General Electric Company.",
+    "biography_index": 42
+  },
+  "bio_b_index": 43,
+  "bio_b_name": "Jordan Cristian Dudley",
+  "n_examples": 5,
+  "rouge": {
+    "ood_bank": {
+      "rouge1": 0.05166666666666666,
+      "rouge2": 0.0,
+      "rougeL": 0.05166666666666666,
+      "rougeLsum": 0.05166666666666666
+    },
+    "no_memory": {
+      "rouge1": 0.023529411764705882,
+      "rouge2": 0.0,
+      "rougeL": 0.023529411764705882,
+      "rougeLsum": 0.023529411764705882
+    },
+    "oracle": {
+      "rouge1": 0.0,
+      "rouge2": 0.0,
+      "rougeL": 0.0,
+      "rougeLsum": 0.0
+    }
+  },
+  "perplexity": {
+    "ood_bank": 244.69319276259878,
+    "no_memory": 474.5960890431182,
+    "oracle": 12.198902876072104
+  }
+}
