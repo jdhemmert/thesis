@@ -5,7 +5,7 @@ import torch
 from typing import Dict, Type, Optional, Tuple, Any
 from enum import Enum
 
-from transformers import AutoTokenizer, AutoModelForCausalLM, PreTrainedModel, PreTrainedTokenizer, LlamaConfig
+from transformers import AutoTokenizer, AutoModelForCausalLM, PreTrainedModel, PreTrainedTokenizer
 from omegaconf import OmegaConf, DictConfig as OmegaDictConfig
 from peft import get_peft_model, set_peft_model_state_dict, LoraConfig, PeftConfig
 import safetensors
@@ -30,6 +30,7 @@ class ModelArchitecture(str, Enum):
     """Enum for names of available model architectures."""
     STANDARD = "standard"
     AUGMENTED_LLAMA = "augmented-llama"
+    AUGMENTED_GPT2 = "augmented-gpt2"
 
 
 class ModelFactory:

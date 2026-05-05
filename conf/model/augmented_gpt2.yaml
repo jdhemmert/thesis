@@ -1,0 +1,9 @@
+defaults:
+  - standard_gpt2
+  - _self_
+
+architecture: AUGMENTED_GPT2
+
+model_config:
+    _target_: src.models.augmented_gpt2.AugmentedGPT2Config
+    virtual_token_count: 20

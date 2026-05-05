@@ -1,6 +1,6 @@
 import torch
 from omegaconf import DictConfig
-from transformers import LlamaModel, PreTrainedTokenizer
+from transformers import PreTrainedModel, PreTrainedTokenizer
 
 from .dispatch import GENERATOR_MAP, POOLER_MAP
 
@@ -8,7 +8,7 @@ class ComposableInitializer:
     def __init__(self, config: DictConfig):
         self.config = config
 
-    def initialize(self, main_model: LlamaModel, main_tokenizer: PreTrainedTokenizer, virtual_token_count: int, dataset_path: str) -> torch.Tensor:
+    def initialize(self, main_model: PreTrainedModel, main_tokenizer: PreTrainedTokenizer, virtual_token_count: int, dataset_path: str) -> torch.Tensor:
         generator_config = self.config.get("embedding_generator")
         if not generator_config:
             raise ValueError("`embedding_generator` config is missing.")

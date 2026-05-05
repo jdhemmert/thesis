@@ -1,0 +1,13 @@
+architecture: STANDARD
+
+model_config:
+    _target_: transformers.GPT2Config
+    model_path: "gpt2"
+    vocab_size: 50257
+    n_positions: 1024
+    n_embd: 768
+    n_layer: 12
+    n_head: 12
+    bos_token_id: 50256
+    eos_token_id: 50256
+    model_type: "gpt2"

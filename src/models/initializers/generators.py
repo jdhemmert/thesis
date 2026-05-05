@@ -3,7 +3,7 @@ import torch
 from typing import Optional
 from omegaconf import DictConfig, OmegaConf
 from dataclasses import dataclass
-from transformers import PreTrainedTokenizer, LlamaModel, AutoModelForCausalLM
+from transformers import PreTrainedTokenizer, PreTrainedModel, AutoModelForCausalLM
 
 from .utils import BaseContextConfig, get_context_text_from_config
 
@@ -18,7 +18,7 @@ class ExternalModelEmbeddingGeneratorConfig(BaseContextConfig):
 
 class BaseEmbeddingGenerator(ABC):
     @abstractmethod
-    def generate(self, main_model: LlamaModel, main_tokenizer: PreTrainedTokenizer, dataset_path: Optional[str]) -> torch.Tensor:
+    def generate(self, main_model: PreTrainedModel, main_tokenizer: PreTrainedTokenizer, dataset_path: Optional[str]) -> torch.Tensor:
         pass
 
 class TokenizerEmbeddingGenerator(BaseEmbeddingGenerator):
@@ -26,7 +26,7 @@ class TokenizerEmbeddingGenerator(BaseEmbeddingGenerator):
         schema = OmegaConf.structured(TokenizerEmbeddingGeneratorConfig)
         self.config: TokenizerEmbeddingGeneratorConfig = OmegaConf.merge(schema, config)
 
-    def generate(self, main_model: LlamaModel, main_tokenizer: PreTrainedTokenizer, dataset_path: Optional[str]) -> torch.Tensor:
+    def generate(self, main_model: PreTrainedModel, main_tokenizer: PreTrainedTokenizer, dataset_path: Optional[str]) -> torch.Tensor:
         context_text = get_context_text_from_config(self.config, dataset_path)
         
         token_ids = main_tokenizer(context_text, return_tensors="pt").input_ids.to(main_model.device)
@@ -40,7 +40,7 @@ class ExternalModelEmbeddingGenerator(BaseEmbeddingGenerator):
         schema = OmegaConf.structured(ExternalModelEmbeddingGeneratorConfig)
         self.config: ExternalModelEmbeddingGeneratorConfig = OmegaConf.merge(schema, config)
 
-    def generate(self, main_model: LlamaModel, main_tokenizer: PreTrainedTokenizer, dataset_path: Optional[str]) -> torch.Tensor:
+    def generate(self, main_model: PreTrainedModel, main_tokenizer: PreTrainedTokenizer, dataset_path: Optional[str]) -> torch.Tensor:
         context_text = get_context_text_from_config(self.config, dataset_path)
         
         print(f"Loading embedding model: {self.config.embedding_model_name_or_path}...")
