@@ -1,0 +1,26 @@
+# @package _global_
+
+defaults:
+    - ood/common
+    - override /model: augmented_gpt2
+    - _self_
+
+
+experiment_subdir: distractor_sweep_gpt2
+
+model:
+    model_config:
+        model_path: gpt2
+        virtual_token_count: 12
+
+task:
+    distractor_n: 1
+
+hydra:
+    mode: MULTIRUN
+    sweep:
+        subdir: ${task.distractor_n}distractor/seed${task.seed}
+    sweeper:
+        params:
+            task.distractor_n: range(0, 5)
+            task.seed: range(0, 5)
