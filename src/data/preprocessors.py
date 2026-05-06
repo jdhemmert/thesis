@@ -69,7 +69,7 @@ class MemoryTaskPreprocessor:
         oracle_pref = None
         memory_pref = None
 
-        if self.dataset_mode == "wikitext" or ("text" in examples and "question" not in examples):
+        if self.dataset_mode != "chunked_lm" and (self.dataset_mode == "wikitext" or ("text" in examples and "question" not in examples)):
             texts = examples["text"]
             oracle_texts = texts
             memory_texts = texts
@@ -78,6 +78,28 @@ class MemoryTaskPreprocessor:
             memory_pref_lens = [0] * len(texts)
 
             bios, qs, ans = texts, [""] * len(texts), [""] * len(texts)
+
+        elif self.dataset_mode == "chunked_lm":
+            oracle_texts, memory_texts = [], []
+            oracle_pref_lens, memory_pref_lens = [], []
+
+            for text in examples["text"]:
+                if len(text) < 100:
+                    continue
+                mid = len(text) // 2
+                first_half = text[:mid]
+                second_half = text[mid:]
+                oracle_texts.append(text)
+                memory_texts.append(second_half)
+                first_tok = self.tokenizer(
+                    first_half, add_special_tokens=True, truncation=True, max_length=max_length
+                ).input_ids
+                oracle_pref_lens.append(len(first_tok))
+                memory_pref_lens.append(0)
+
+            bios = oracle_texts
+            qs   = [""] * len(oracle_texts)
+            ans  = memory_texts
 
         elif self.dataset_mode == "attributes":
             oracle_texts, memory_texts = [], []

@@ -4,8 +4,8 @@ import json
 from datasets import load_dataset
 
 def main():
-    print("Downloading WikiText-2-raw-v1...")
-    dataset = load_dataset("wikitext", "wikitext-2-raw-v1", split="train")
+    print("Downloading WikiText-103-raw-v1...")
+    dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
     
     # Filter out empty lines (WikiText-2 raw contains empty strings and titles)
     # We want actual text content for KL alignment.
@@ -27,7 +27,7 @@ def main():
         for entry in processed_data:
             f.write(json.dumps(entry) + "\n")
             
-    print("WikiText-2 download and processing complete.")
+    print("WikiText-103 download and processing complete.")
 
 if __name__ == "__main__":
     main()

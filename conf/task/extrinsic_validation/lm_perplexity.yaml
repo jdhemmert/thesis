@@ -1,0 +1,7 @@
+frequency: END
+metric_type: lm_perplexity
+metric_config:
+  _target_: src.eval.metrics.lm_perplexity.LMPerplexityMetricConfig
+  text_key: "answer"
+  max_length: 512
+  log_predictions: true

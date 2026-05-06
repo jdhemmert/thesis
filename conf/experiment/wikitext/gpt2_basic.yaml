@@ -1,0 +1,21 @@
+# @package _global_
+
+defaults:
+  - /task/extrinsic_validation: lm_perplexity
+  - override /task: train_memory
+  - override /model: augmented_gpt2
+  - override /dataset: wikitext_chunked
+  - _self_
+
+experiment_path: "wikitext"
+experiment_subdir: "gpt2_basic"
+
+task:
+  num_train_epochs: 5
+  sample_n: 0
+  loss_type: TEACHER_ONLY
+
+model:
+  model_config:
+    model_path: "gpt2"
+    virtual_token_count: 20

@@ -6,6 +6,7 @@ from src.eval.metrics.base import MetricFactory, BaseMetricLoader, BaseMetric
 from src.eval.metrics.evaluate_metric import EvaluateMetric, EvaluateMetricConfig
 from src.eval.metrics.beaver import BeaverMetric, BeaverMetricConfig
 from src.eval.metrics.perplexity import PerplexityMetric, PerplexityMetricConfig
+from src.eval.metrics.lm_perplexity import LMPerplexityMetric, LMPerplexityMetricConfig
 from src.config_schemas import PromptConfig
 
 
@@ -49,5 +50,18 @@ class PerplexityMetricLoader(BaseMetricLoader):
             eval_dataset=self.eval_dataset,
             output_dir=self.output_dir,
             prompt_config=self.prompt_config,
+        )
+
+
+@MetricFactory.register("lm_perplexity")
+class LMPerplexityMetricLoader(BaseMetricLoader):
+    """Loads and instantiates the LMPerplexityMetric."""
+
+    def load(self) -> LMPerplexityMetric:
+        return LMPerplexityMetric(
+            config=self.metric_config,
+            tokenizer=self.tokenizer,
+            eval_dataset=self.eval_dataset,
+            output_dir=self.output_dir,
         )
 
