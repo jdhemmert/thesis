@@ -119,7 +119,7 @@ class TrainMemoryTask:
             parser = None
             biography_task = None
             # Legacy path: remove columns only when row count may change.
-            if self.dataset_config.dataset_mode == "attributes" or self.config.extrinsic_validation.frequency == ExtrinsicValidationFrequency.NEVER:
+            if self.dataset_config.dataset_mode in ("attributes", "chunked_lm") or self.config.extrinsic_validation.frequency == ExtrinsicValidationFrequency.NEVER:
                 remove_columns = original_columns
             else:
                 remove_columns = None
