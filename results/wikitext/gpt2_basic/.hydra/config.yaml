@@ -1,0 +1,88 @@
+project_name: thesis
+seed: 42
+model:
+  architecture: AUGMENTED_GPT2
+  model_config:
+    _target_: src.models.augmented_gpt2.AugmentedGPT2Config
+    model_path: gpt2
+    vocab_size: 50257
+    n_positions: 1024
+    n_embd: 768
+    n_layer: 12
+    n_head: 12
+    bos_token_id: 50256
+    eos_token_id: 50256
+    model_type: gpt2
+    virtual_token_count: 20
+  adapter_config: null
+  adapter_path: null
+  precision: bf16
+task:
+  _target_: src.tasks.train_memory.TrainMemoryTask
+  name: train_memory
+  learning_rate: 0.0002
+  lr_scheduler_type: linear
+  num_train_epochs: 5
+  precision: bf16
+  seed: 1778038916
+  max_length: 512
+  eval_strategy: epoch
+  eval_steps: 100
+  sample_n: 0
+  sample_strategy: random
+  log_predictions: true
+  extrinsic_validation:
+    frequency: END
+    metric_type: lm_perplexity
+    metric_config:
+      _target_: src.eval.metrics.lm_perplexity.LMPerplexityMetricConfig
+      text_key: answer
+      max_length: 512
+      log_predictions: true
+    generation_input_key: null
+  save_strategy: 'no'
+  training_arguments: {}
+  loss_type: TEACHER_ONLY
+  alpha: 0.5
+  distractor_n: 0
+  temperature: 1.0
+  return_metric_key: eval_loss
+  initialization_method: null
+  initialization_config: {}
+  trainable_strategy: soft_prompt_only
+  ood_eval:
+    enabled: false
+    target_indices: []
+    max_new_tokens: 20
+    sample_n: null
+dataset:
+  path: data/wikitext_train.jsonl
+  test_split_ratio: 0.05
+  streaming: false
+  physical_batch_size: 4
+  accumulation_steps: 1
+  dataset_mode: chunked_lm
+  parser: null
+  biography_task: null
+  biography_index: null
+prompts:
+  contextual_qa_training: 'Biography: {biography}
+
+    Question: {question}
+
+    Answer: {answer}'
+  contextual_qa_generation: 'Biography: {biography}
+
+    Question: {question}
+
+    Answer:'
+  direct_qa_training: 'Question: {question}
+
+    Answer: {answer}'
+  direct_qa_generation: 'Question: {question}
+
+    Answer:'
+output_root: results
+experiment_path: wikitext
+experiment_subdir: gpt2_basic
+base_output_dir: ${output_root}/${experiment_path}/${experiment_subdir}
