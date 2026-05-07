@@ -1,0 +1,3 @@
+- task.distractor_n=3
+- task.seed=3
+- +experiment=ood/distractor_sweep_gpt2
